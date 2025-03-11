@@ -249,11 +249,10 @@ class InputDataset(torch.utils.data.Dataset):
 # Models
 # =============================================================================
 class UnsupervisedModel(lightning.LightningModule):
-    def __init__(self, num_features, layers, learning_rate, dropout, sequence_length, mouse_scalers, save_dir, trial_number=None):
+    def __init__(self, num_features, layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
         super().__init__()
         self.save_hyperparameters()
         self.sequence_length = sequence_length
-        self.mouse_scalers = mouse_scalers
         self.learning_rate = learning_rate
 
         self.encoders = torch.nn.ModuleList()
@@ -360,11 +359,10 @@ class UnsupervisedModel(lightning.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
 class SupervisedModel(lightning.LightningModule):
-    def __init__(self, num_features, layers, learning_rate, dropout, sequence_length, mouse_scalers, save_dir, trial_number=None):
+    def __init__(self, num_features, layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
         super().__init__()
         self.save_hyperparameters()
         self.sequence_length = sequence_length
-        self.mouse_scalers = mouse_scalers
         self.learning_rate = learning_rate
 
         self.layers = torch.nn.ModuleList()
@@ -450,6 +448,8 @@ class SupervisedModel(lightning.LightningModule):
         self.axes.plot(list(range(len(self.test_metric_history))), self.test_metric_history)
         self.axes.set_xlabel('Sequence')
         self.axes.set_ylabel('Confidence')
+        self.axes.set_ylim(0, 1)
+        self.axes.yaxis.get_major_formatter().set_useOffset(False)
         self.axes.set_title(f'Average Confidence: {torch.stack(self.test_metric_history).mean()}')
         self.figure.savefig(f'{self.save_dir}/report_supervised_{time.strftime('%Y%m%d-%H%M%S')}.png')
         return super().on_test_end()
@@ -467,7 +467,6 @@ def train_model(configuration):
     tuning_patience = configuration['tuning_patience']
     keyboard_whitelist = configuration['keyboard_whitelist']
     mouse_whitelist = configuration['mouse_whitelist']
-    mouse_scalers = configuration['mouse_scalers']
     gamepad_whitelist = configuration['gamepad_whitelist']
     whitelist = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
 
@@ -488,8 +487,8 @@ def train_model(configuration):
             print('No validation files selected. Exiting...')
             return
 
-        train_datasets = [InputDataset(file, sequence_length, mouse_scalers, whitelist) for file in train_files]
-        val_datasets = [InputDataset(file, sequence_length, mouse_scalers, whitelist) for file in val_files]
+        train_datasets = [InputDataset(file, sequence_length, whitelist) for file in train_files]
+        val_datasets = [InputDataset(file, sequence_length, whitelist) for file in val_files]
 
         if model_type == 'supervised':
             cheat_train_files = tkinter.filedialog.askopenfilenames(
@@ -506,8 +505,8 @@ def train_model(configuration):
             if not cheat_val_files:
                 print('No files selected. Exiting...')
                 return
-            train_datasets += [InputDataset(file, sequence_length, mouse_scalers, whitelist, label=1) for file in cheat_train_files]
-            val_datasets += [InputDataset(file, sequence_length, mouse_scalers, whitelist, label=1) for file in cheat_val_files]
+            train_datasets += [InputDataset(file, sequence_length, whitelist, label=1) for file in cheat_train_files]
+            val_datasets += [InputDataset(file, sequence_length, whitelist, label=1) for file in cheat_val_files]
 
         train_dataset = torch.utils.data.ConcatDataset(train_datasets)
         val_dataset = torch.utils.data.ConcatDataset(val_datasets)
@@ -555,7 +554,6 @@ def train_model(configuration):
                 learning_rate=learning_rate,
                 dropout=dropout,
                 sequence_length=sequence_length,
-                mouse_scalers=mouse_scalers,
                 save_dir=save_dir,
                 trial_number=trial.number
             )
@@ -566,7 +564,6 @@ def train_model(configuration):
                 learning_rate=learning_rate,
                 dropout=dropout,
                 sequence_length=sequence_length,
-                mouse_scalers=mouse_scalers,
                 save_dir=save_dir,
                 trial_number=trial.number
             )
@@ -595,7 +592,11 @@ def train_model(configuration):
             enable_model_summary=False
         )
         
-        trainer.fit(model, train_loader, val_loader)
+        try:
+            trainer.fit(model, train_loader, val_loader)
+        finally:
+            matplotlib.pyplot.close(model.figure)
+
         print(f'[Early Stopping Triggered!] Trial {trial.number} stopped at epoch {trainer.current_epoch}.')
         best_checkpoint = checkpoint_callback.best_model_path
         if best_checkpoint:
@@ -624,7 +625,8 @@ def train_model(configuration):
     best_trials = study.best_trials
     print('\nBest Trials:')
     for trial in best_trials:
-        print(f'Trial: {trial.number} Loss: {trial.values[0]} Params: {trial.values[1]}')
+        #print(f'Trial: {trial.number} Loss: {trial.values[0]} Params: {trial.values[1]}')
+        print(f'Trial: {trial.number} Loss: {trial.values[0]}')
     print('\nPlease copy your desired model from the local models directory.')
 
 # =============================================================================
@@ -656,7 +658,7 @@ def run_static_analysis(configuration):
             model = SupervisedModel.load_from_checkpoint(checkpoint)
         model.save_dir = report_dir
 
-        test_dataset = InputDataset(file, sequence_length, model.mouse_scalers, whitelist)
+        test_dataset = InputDataset(file, sequence_length, whitelist)
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
 
         trainer = lightning.Trainer(
