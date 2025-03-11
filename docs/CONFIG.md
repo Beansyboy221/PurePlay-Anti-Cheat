@@ -48,7 +48,7 @@ The mode is set by the `"mode"` key in `config.json`.
 
 - **capture_bind**  
   *Type:* String  
-  *Recommended:* `"right"`  
+  *Recommended:* `"right" or "RT"`  
   *Description:* The button that, when pressed, starts data collection. Can be any button from the keyboard or mouse.
 
 - **model_type**  
@@ -73,15 +73,10 @@ The mode is set by the `"mode"` key in `config.json`.
 
 - **mouse_whitelist**  
   *Type:* List of Strings  
-  *Recommended:* `["deltaX", "deltaY", "angle"]`  
+  *Recommended:* `["deltaX", "deltaY"]`  
   *Description:* List of mouse features to capture.  
   *Possible Values:*  
-    `left, right, middle, x, x2, deltaX, deltaY, angle`  
-
-- **mouse_scalers**  
-  *Type:* List of floats  
-  *Recommended:* `[0.01, 0.01]`  
-  *Description:* (x, y) normalization factors for mouse movement.  
+    `left, right, middle, x, x2, deltaX, deltaY`
 
 - **mouse_dpi**  
   *Type:* Integer  

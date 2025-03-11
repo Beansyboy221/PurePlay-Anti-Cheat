@@ -1,11 +1,11 @@
 import lightning.pytorch.callbacks
+import sklearn.preprocessing
 import tkinter.filedialog
 import optuna.integration
 import matplotlib.pyplot
 import torch.utils.data
 import ctypes.wintypes
 import lightning
-import optunahub
 import threading
 import win32gui
 import torch.nn
@@ -24,11 +24,12 @@ import math
 import csv
 
 # =============================================================================
-# Global Variables for Raw Input
+# Global Variables
 # =============================================================================
 mouse_deltas = [0, 0]  # [delta_x, delta_y]
 mouse_lock = threading.Lock()
 user32_library = ctypes.windll.user32
+scaler = sklearn.preprocessing.MinMaxScaler()
 
 # =============================================================================
 # ctypes Structures for Raw Input
@@ -121,7 +122,7 @@ def poll_mouse(mouse_whitelist, dpi):
     for button in mouse_whitelist:
         if button in ['left', 'right', 'middle', 'x', 'x2']:
             row.append(1 if mouse.is_pressed(button) else 0)
-    if any(key in mouse_whitelist for key in ('deltaX', 'deltaY', 'angle')):
+    if any(key in mouse_whitelist for key in ('deltaX', 'deltaY')):
         with mouse_lock:
             if 'deltaX' in mouse_whitelist:
                 inches = mouse_deltas[0] / dpi
@@ -129,12 +130,6 @@ def poll_mouse(mouse_whitelist, dpi):
             if 'deltaY' in mouse_whitelist:
                 inches = mouse_deltas[1] / dpi
                 row.append(inches)
-            if 'angle' in mouse_whitelist:
-                angle = math.atan2(mouse_deltas[1], mouse_deltas[0])
-                if angle < 0:
-                    angle = angle % (2 * math.pi)
-                normalized_angle = angle / (2 * math.pi)
-                row.append(normalized_angle)
             mouse_deltas[0] = 0
             mouse_deltas[1] = 0
     return row
@@ -188,7 +183,7 @@ def collect_input_data(configuration):
     save_directory = tkinter.filedialog.askdirectory(title='Select data save folder')
     file_name = f"{save_directory}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.csv"
 
-    if any(key in mouse_whitelist for key in ('deltaX', 'deltaY', 'angle')):
+    if any(key in mouse_whitelist for key in ('deltaX', 'deltaY')):
         raw_input_thread = threading.Thread(target=listen_for_mouse_movement, daemon=True)
         raw_input_thread.start()
     
@@ -227,15 +222,15 @@ def collect_input_data(configuration):
 # Dataset
 # =============================================================================
 class InputDataset(torch.utils.data.Dataset):
-    def __init__(self, file_path, sequence_length, mouse_scalers, whitelist, label=0):
+    def __init__(self, file_path, sequence_length, whitelist, label=0):
         self.sequence_length = sequence_length
         self.label = label
         data_frame = pandas.read_csv(file_path)
         self.feature_columns = [col for col in whitelist if col in data_frame.columns]
         if 'deltaX' in self.feature_columns:
-            data_frame['deltaX'] = (numpy.tanh(mouse_scalers[0] * data_frame['deltaX']) + 1) / 2
+            data_frame['deltaX'] = scaler.fit_transform(data_frame['deltaX'].values.reshape(-1, 1)).flatten()
         if 'deltaY' in self.feature_columns:
-            data_frame['deltaY'] = (numpy.tanh(mouse_scalers[1] * data_frame['deltaY']) + 1) / 2
+            data_frame['deltaY'] = scaler.fit_transform(data_frame['deltaY'].values.reshape(-1, 1)).flatten()
         data_array = data_frame[self.feature_columns].values.astype(numpy.float32)
         remainder = len(data_array) % sequence_length
         if remainder != 0:
@@ -311,14 +306,14 @@ class UnsupervisedModel(lightning.LightningModule):
     def training_step(self, batch, batch_idx):
         inputs, labels = batch
         reconstruction = self.forward(inputs)
-        reconstruction_error = torch.sqrt(self.loss_function(reconstruction, inputs))
+        reconstruction_error = self.loss_function(reconstruction, inputs)
         self.train_metric_history.append(reconstruction_error.detach().cpu())
         return reconstruction_error
 
     def validation_step(self, batch, batch_idx):
         inputs, labels = batch
         reconstruction = self.forward(inputs)
-        reconstruction_error = torch.sqrt(self.loss_function(reconstruction, inputs))
+        reconstruction_error = self.loss_function(reconstruction, inputs)
         self.val_metric_history.append(reconstruction_error.detach().cpu())
         self.log('val_loss', reconstruction_error, prog_bar=True, on_epoch=True)
         return reconstruction_error
@@ -340,7 +335,7 @@ class UnsupervisedModel(lightning.LightningModule):
         self.axes.plot(self.epoch_indices, self.avg_train_losses, label='Train Loss')
         self.axes.plot(self.epoch_indices, self.avg_val_losses, label='Val Loss')
         self.axes.set_xlabel('Epoch')
-        self.axes.set_ylabel('RMSE')
+        self.axes.set_ylabel('MSE')
         self.axes.legend()
         self.figure.savefig(f'{self.save_dir}/trial{self.trial_number}_unsupervised_{time.strftime('%Y%m%d-%H%M%S')}.png')
         matplotlib.pyplot.close(self.figure)
@@ -356,7 +351,7 @@ class UnsupervisedModel(lightning.LightningModule):
         self.axes.clear()
         self.axes.plot(list(range(len(self.test_metric_history))), self.test_metric_history)
         self.axes.set_xlabel('Sequence')
-        self.axes.set_ylabel('Reconstruction Error (RMSE)')
+        self.axes.set_ylabel('Reconstruction Error (MSE)')
         self.axes.set_title(f'Average Error: {torch.stack(self.test_metric_history).mean()}')
         self.figure.savefig(f'{self.save_dir}/report_unsupervised_{time.strftime('%Y%m%d-%H%M%S')}.png')
         return super().on_test_end()
@@ -492,7 +487,7 @@ def train_model(configuration):
         if not val_files:
             print('No validation files selected. Exiting...')
             return
-        
+
         train_datasets = [InputDataset(file, sequence_length, mouse_scalers, whitelist) for file in train_files]
         val_datasets = [InputDataset(file, sequence_length, mouse_scalers, whitelist) for file in val_files]
 
@@ -740,10 +735,10 @@ def run_live_analysis(configuration, root):
         if len(sequence) >= sequence_length:
             if x_index is not None:
                 for row in sequence:
-                    row[x_index] = (numpy.tanh(model.mouse_scalers[0] * row[x_index]) + 1) / 2
+                    row[x_index] = scaler.fit_transform(numpy.array(row[x_index]).reshape(-1, 1)).flatten()
             if y_index is not None:
                 for row in sequence:
-                    row[y_index] = (numpy.tanh(model.mouse_scalers[1] * row[y_index]) + 1) / 2
+                    row[y_index] = scaler.fit_transform(numpy.array(row[y_index]).reshape(-1, 1)).flatten()
             input_sequence = torch.tensor([sequence[-sequence_length:]], dtype=torch.float32, device=device)
             if model_type == 'unsupervised':
                 reconstruction = model(input_sequence)
