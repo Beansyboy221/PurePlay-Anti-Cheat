@@ -6,7 +6,6 @@
   "model_structure": [],
   "keyboard_whitelist": [],
   "mouse_whitelist": ["deltaX", "deltaY"],
-  "mouse_dpi": 1600,
   "gamepad_whitelist": [],
   "polling_rate": 60,
   "sequence_length": 30,

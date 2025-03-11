@@ -117,7 +117,7 @@ def poll_keyboard(keyboard_whitelist):
 # =============================================================================
 # Helper Function to Poll Mouse
 # =============================================================================
-def poll_mouse(mouse_whitelist, dpi):
+def poll_mouse(mouse_whitelist):
     row = []
     for button in mouse_whitelist:
         if button in ['left', 'right', 'middle', 'x', 'x2']:
@@ -125,11 +125,9 @@ def poll_mouse(mouse_whitelist, dpi):
     if any(key in mouse_whitelist for key in ('deltaX', 'deltaY')):
         with mouse_lock:
             if 'deltaX' in mouse_whitelist:
-                inches = mouse_deltas[0] / dpi
-                row.append(inches)
+                row.append(mouse_deltas[0])
             if 'deltaY' in mouse_whitelist:
-                inches = mouse_deltas[1] / dpi
-                row.append(inches)
+                row.append(mouse_deltas[1])
             mouse_deltas[0] = 0
             mouse_deltas[1] = 0
     return row
@@ -177,7 +175,6 @@ def collect_input_data(configuration):
     polling_rate = configuration['polling_rate']
     keyboard_whitelist = configuration['keyboard_whitelist']
     mouse_whitelist = configuration['mouse_whitelist']
-    mouse_dpi = configuration['mouse_dpi']
     gamepad_whitelist = configuration['gamepad_whitelist']
 
     save_directory = tkinter.filedialog.askdirectory(title='Select data save folder')
@@ -210,7 +207,7 @@ def collect_input_data(configuration):
                     pass
             if should_capture:
                 kb_row = poll_keyboard(keyboard_whitelist)
-                m_row = poll_mouse(mouse_whitelist, mouse_dpi)
+                m_row = poll_mouse(mouse_whitelist)
                 gp_row = poll_gamepad(gamepad_whitelist)
                 row = kb_row + m_row + gp_row
                 if not (row.count(0) == len(row)):
@@ -680,7 +677,6 @@ def run_live_analysis(configuration, root):
     sequence_length = configuration['sequence_length']
     keyboard_whitelist = configuration['keyboard_whitelist']
     mouse_whitelist = configuration['mouse_whitelist']
-    mouse_dpi = configuration['mouse_dpi']
     gamepad_whitelist = configuration['gamepad_whitelist']
     whitelist = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
     
@@ -728,7 +724,7 @@ def run_live_analysis(configuration, root):
                 pass
         if should_capture:
             kb_row = poll_keyboard(keyboard_whitelist)
-            m_row = poll_mouse(mouse_whitelist, mouse_dpi)
+            m_row = poll_mouse(mouse_whitelist)
             gp_row = poll_gamepad(gamepad_whitelist)
             row = kb_row + m_row + gp_row
             if not (row.count(0) == len(row)):
