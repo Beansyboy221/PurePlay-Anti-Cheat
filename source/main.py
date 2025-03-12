@@ -543,6 +543,8 @@ def train_model(configuration):
                 trial_number=trial.number
             )
 
+        param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
         early_stop_callback = lightning.pytorch.callbacks.EarlyStopping(
             monitor='val_loss',
             min_delta=0.0001,
@@ -552,7 +554,7 @@ def train_model(configuration):
         checkpoint_callback = lightning.pytorch.callbacks.ModelCheckpoint(
             monitor='val_loss',
             dirpath=save_dir,
-            filename=f"trial_{trial.number}_best",
+            filename=f"trial_{trial.number}_{param_count}_{time.strftime('%Y%m%d-%H%M%S')}",
             save_top_k=1,
             mode='min'
         )
@@ -580,7 +582,6 @@ def train_model(configuration):
         val_loss = trainer.callback_metrics.get('val_loss')
         if val_loss is None:
             raise ValueError('Validation loss not found!')
-        #param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
         return val_loss.item()
 
     logging.getLogger('lightning.pytorch').setLevel(logging.ERROR)
@@ -597,12 +598,9 @@ def train_model(configuration):
     print('\nTuning Importances:')
     for key, value in importances.items():
         print(f'{key}:{value}')
-    best_trials = study.best_trials
-    print('\nBest Trials:')
-    for trial in best_trials:
-        #print(f'Trial: {trial.number} Loss: {trial.values[0]} Params: {trial.values[1]}')
-        print(f'Trial: {trial.number} Loss: {trial.values[0]}')
-    print('\nPlease copy your desired model from the local models directory.')
+    best_trial = study.best_trial
+    print(f'Best Trial: {best_trial.number}')
+    print(f'Val Loss: {best_trial.values[0]}')
 
 # =============================================================================
 # Static Analysis Process
