@@ -82,12 +82,12 @@ The mode is set by the `"mode"` key in `config.json`.
 
 - **polling_rate**  
   *Type:* Integer (Hz)  
-  *Recommended:* `120`  
+  *Recommended:* `60`  
   *Description:* The frequency at which keyboard, mouse, and gamepad inputs are polled.
 
 - **sequence_length**  
   *Type:* Integer  
-  *Recommended:* `60`  
+  *Recommended:* `30`  
   *Description:* The number of polls per input pattern you want to recognize.
 
 - **batch_size**  

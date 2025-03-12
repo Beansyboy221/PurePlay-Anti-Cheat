@@ -244,27 +244,27 @@ class InputDataset(torch.utils.data.Dataset):
 # Models
 # =============================================================================
 class UnsupervisedModel(lightning.LightningModule):
-    def __init__(self, num_features, hidden_dim, num_layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
+    def __init__(self, num_features, hyperparams, sequence_length, save_dir, trial_number=None):
         super().__init__()
         self.save_hyperparameters()
         self.sequence_length = sequence_length
-        self.learning_rate = learning_rate
+        self.learning_rate = hyperparams['learning_rate']
 
         self.encoder = torch.nn.LSTM(
             input_size=num_features,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
+            hidden_size=hyperparams['hidden_dim'],
+            num_layers=hyperparams['num_layers'],
             batch_first=True,
-            dropout=dropout
+            dropout=hyperparams['dropout']
         )
         self.decoder = torch.nn.LSTM(
-            input_size=hidden_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
+            input_size=hyperparams['hidden_dim'],
+            hidden_size=hyperparams['hidden_dim'],
+            num_layers=hyperparams['num_layers'],
             batch_first=True,
-            dropout=dropout
+            dropout=hyperparams['dropout']
         )
-        self.output_layer = torch.nn.Linear(hidden_dim, num_features)
+        self.output_layer = torch.nn.Linear(hyperparams['hidden_dim'], num_features)
 
         self.loss_function = torch.nn.MSELoss()
         self.train_metric_history = []
@@ -343,20 +343,20 @@ class UnsupervisedModel(lightning.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
 class SupervisedModel(lightning.LightningModule):
-    def __init__(self, num_features, hidden_dim, num_layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
+    def __init__(self, num_features, hyperparams, sequence_length, save_dir, trial_number=None):
         super().__init__()
         self.save_hyperparameters()
         self.sequence_length = sequence_length
-        self.learning_rate = learning_rate
+        self.learning_rate = hyperparams['learning_rate']
 
         self.lstm= torch.nn.LSTM(
             input_size=num_features,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
+            hidden_size=hyperparams['hidden_dim'],
+            num_layers=hyperparams['num_layers'],
             batch_first=True,
-            dropout=dropout
+            dropout=hyperparams['dropout']
         )
-        self.classifier_layer = torch.nn.Linear(hidden_dim, 1)
+        self.classifier_layer = torch.nn.Linear(hyperparams['hidden_dim'], 1)
 
         self.loss_function = torch.nn.BCEWithLogitsLoss()
 
@@ -510,35 +510,19 @@ def train_model(configuration):
                 study.stop()
 
     def objective(trial):
-        hidden_dim = trial.suggest_int('hidden_dim', 1, 256, log=True)
-        num_layers = trial.suggest_int('num_layers', 1, 5)
-        learning_rate = trial.suggest_float('learning_rate', 0.00001, 0.01, log=True)
-        dropout = trial.suggest_float('dropout', 0.0, 0.5, step=0.05)
-        if num_layers == 1:
-            dropout = 0.0
+        hyperparams = {
+            'hidden_dim' : trial.suggest_int('hidden_dim', 1, 256, log=True),
+            'num_layers' : trial.suggest_int('num_layers', 1, 6),
+            'learning_rate' : trial.suggest_float('learning_rate', 0.00001, 0.01, log=True),
+            'dropout' : trial.suggest_float('dropout', 0.0, 0.5, step=0.1)
+        }
+        if hyperparams['num_layers'] == 1:
+            hyperparams['dropout'] = 0.0
         
         if model_type == 'unsupervised':
-            model = UnsupervisedModel(
-                num_features=len(whitelist),
-                hidden_dim=hidden_dim,
-                num_layers=num_layers,
-                learning_rate=learning_rate,
-                dropout=dropout,
-                sequence_length=sequence_length,
-                save_dir=save_dir,
-                trial_number=trial.number
-            )
+            model = UnsupervisedModel(len(whitelist), hyperparams, sequence_length, save_dir, trial.number)
         else:
-            model = SupervisedModel(
-                num_features=len(whitelist),
-                hidden_dim=hidden_dim,
-                num_layers=num_layers,
-                learning_rate=learning_rate,
-                dropout=dropout,
-                sequence_length=sequence_length,
-                save_dir=save_dir,
-                trial_number=trial.number
-            )
+            model = SupervisedModel(len(whitelist), hyperparams, sequence_length, save_dir, trial.number)
 
         param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -557,7 +541,7 @@ def train_model(configuration):
         )
         prune_callback = optuna.integration.PyTorchLightningPruningCallback(trial, monitor='val_loss')
         trainer = lightning.Trainer(
-            max_epochs=2048,
+            max_epochs=1024,
             precision='16-mixed',
             callbacks=[early_stop_callback, checkpoint_callback, prune_callback],
             logger=False,
