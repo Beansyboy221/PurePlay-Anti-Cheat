@@ -7,5 +7,6 @@
   "mouse_whitelist": ["deltaX", "deltaY"],
   "gamepad_whitelist": [],
   "polling_rate": 60,
-  "sequence_length": 30
+  "sequence_length": 30,
+  "batch_size": 16
 }

@@ -442,6 +442,7 @@ class SupervisedModel(lightning.LightningModule):
 def train_model(configuration):
     model_type = configuration['model_type']
     sequence_length = configuration['sequence_length']
+    batch_size = configuration['batch_size']
     keyboard_whitelist = configuration['keyboard_whitelist']
     mouse_whitelist = configuration['mouse_whitelist']
     gamepad_whitelist = configuration['gamepad_whitelist']
@@ -488,7 +489,8 @@ def train_model(configuration):
 
         train_dataset = torch.utils.data.ConcatDataset(train_datasets)
         val_dataset = torch.utils.data.ConcatDataset(val_datasets)
-        
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         save_dir = tkinter.filedialog.askdirectory(title='Select model/graph save location')
 
@@ -508,14 +510,10 @@ def train_model(configuration):
                 study.stop()
 
     def objective(trial):
-        batch_size = trial.suggest_int('batch_size', 16, 256, step=30)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-        
         hidden_dim = trial.suggest_int('hidden_dim', 1, 256, log=True)
         num_layers = trial.suggest_int('num_layers', 1, 5)
         learning_rate = trial.suggest_float('learning_rate', 0.00001, 0.01, log=True)
-        dropout = trial.suggest_float('dropout', 0.0, 0.5, log=True)
+        dropout = trial.suggest_float('dropout', 0.0, 0.5, step=0.05)
         if num_layers == 1:
             dropout = 0.0
         
@@ -559,7 +557,7 @@ def train_model(configuration):
         )
         prune_callback = optuna.integration.PyTorchLightningPruningCallback(trial, monitor='val_loss')
         trainer = lightning.Trainer(
-            max_epochs=1024,
+            max_epochs=2048,
             precision='16-mixed',
             callbacks=[early_stop_callback, checkpoint_callback, prune_callback],
             logger=False,
@@ -587,7 +585,7 @@ def train_model(configuration):
     study = optuna.create_study(direction='minimize')
     study.optimize(
         objective,
-        n_trials=1024,
+        n_trials=2048,
         callbacks=[KillKeyCallback(kill_key)],
         gc_after_trial=True
     )
