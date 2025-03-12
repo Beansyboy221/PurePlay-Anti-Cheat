@@ -1,5 +1,5 @@
 {
-  "mode": "collect",
+  "mode": "test",
   "kill_key": "\\",
   "capture_bind": "right",
   "model_type": "unsupervised",

@@ -20,7 +20,6 @@ import mouse
 import numpy
 import json
 import time
-import math
 import csv
 
 # =============================================================================
@@ -509,11 +508,11 @@ def train_model(configuration):
                 study.stop()
 
     def objective(trial):
-        batch_size = trial.suggest_int('batch_size', 32, 512, log=True)
+        batch_size = trial.suggest_int('batch_size', 32, 512, step=32)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         
-        hidden_dim = trial.suggest_int(f'hidden_dim', 1, 256, step=15)
+        hidden_dim = trial.suggest_int(f'hidden_dim', 1, 256, step=5)
         num_layers = trial.suggest_int('num_layers', 1, 5)
         learning_rate = trial.suggest_float('learning_rate', 0.00001, 0.01, log=True)
         dropout = trial.suggest_float('dropout', 0.0, 0.5, step=0.1)
@@ -547,7 +546,7 @@ def train_model(configuration):
 
         early_stop_callback = lightning.pytorch.callbacks.EarlyStopping(
             monitor='val_loss',
-            min_delta=0.0001,
+            min_delta=-1e-8,
             patience=10,
             mode='min'
         )
@@ -560,7 +559,7 @@ def train_model(configuration):
         )
         prune_callback = optuna.integration.PyTorchLightningPruningCallback(trial, monitor='val_loss')
         trainer = lightning.Trainer(
-            max_epochs=512,
+            max_epochs=1024,
             precision='16-mixed',
             callbacks=[early_stop_callback, checkpoint_callback, prune_callback],
             logger=False,
@@ -589,7 +588,7 @@ def train_model(configuration):
     consecutive_prune_callback = ConsecutivePrunedTrialsCallback(tuning_patience)
     study.optimize(
         objective,
-        n_trials=512,
+        n_trials=1024,
         callbacks=[consecutive_prune_callback],
         gc_after_trial=True
     )
