@@ -447,6 +447,7 @@ def train_model(configuration):
     mouse_whitelist = configuration['mouse_whitelist']
     gamepad_whitelist = configuration['gamepad_whitelist']
     whitelist = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
+    kill_key = configuration['kill_key']
 
     # Preprocessing
     if whitelist:
@@ -493,18 +494,18 @@ def train_model(configuration):
         save_dir = tkinter.filedialog.askdirectory(title='Select model/graph save location')
 
     # Tuning and Training
-    class ConsecutivePrunedTrialsCallback:
-        def __init__(self, patience):
-            self.patience = patience
-            self.consecutive_pruned = 0
+    class KillKeyCallback:
+        def __init__(self, stop_key='q'):
+            self.stop_key = stop_key
+            self.stop_flag = False
+            keyboard.add_hotkey(self.stop_key, self.stop)
+
+        def stop(self):
+            print(f"Stopping study. Finishing current trial...")
+            self.stop_flag = True
 
         def __call__(self, study: optuna.Study, trial: optuna.Trial):
-            if trial.state == optuna.trial.TrialState.PRUNED:
-                self.consecutive_pruned += 1
-            else:
-                self.consecutive_pruned = 0
-            if self.consecutive_pruned >= self.patience:
-                print(f'Stopping study: {self.consecutive_pruned} consecutive pruned trials.')
+            if self.stop_flag:
                 study.stop()
 
     def objective(trial):
@@ -512,7 +513,7 @@ def train_model(configuration):
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         
-        hidden_dim = trial.suggest_int(f'hidden_dim', 1, 256, step=5)
+        hidden_dim = trial.suggest_int('hidden_dim', 1, 256, step=5)
         num_layers = trial.suggest_int('num_layers', 1, 5)
         learning_rate = trial.suggest_float('learning_rate', 0.00001, 0.01, log=True)
         dropout = trial.suggest_float('dropout', 0.0, 0.5, step=0.1)
@@ -585,11 +586,10 @@ def train_model(configuration):
 
     logging.getLogger('lightning.pytorch').setLevel(logging.ERROR)
     study = optuna.create_study(direction='minimize')
-    consecutive_prune_callback = ConsecutivePrunedTrialsCallback(tuning_patience)
     study.optimize(
         objective,
         n_trials=1024,
-        callbacks=[consecutive_prune_callback],
+        callbacks=[KillKeyCallback(kill_key)],
         gc_after_trial=True
     )
 
@@ -598,8 +598,7 @@ def train_model(configuration):
     for key, value in importances.items():
         print(f'{key}:{value}')
     best_trial = study.best_trial
-    print(f'Best Trial: {best_trial.number}')
-    print(f'Val Loss: {best_trial.values[0]}')
+    print(f'\nBest Trial: {best_trial.number} Loss: {best_trial.values[0]}')
 
 # =============================================================================
 # Static Analysis Process

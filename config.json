@@ -1,5 +1,5 @@
 {
-  "mode": "test",
+  "mode": "train",
   "kill_key": "\\",
   "capture_bind": "right",
   "model_type": "unsupervised",
@@ -7,6 +7,5 @@
   "mouse_whitelist": ["deltaX", "deltaY"],
   "gamepad_whitelist": [],
   "polling_rate": 60,
-  "sequence_length": 30,
-  "tuning_patience": 20
+  "sequence_length": 30
 }
