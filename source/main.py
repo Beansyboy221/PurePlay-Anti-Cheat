@@ -205,13 +205,12 @@ def collect_input_data(configuration):
                         should_capture = True
                 except:
                     pass
-            if should_capture:
-                kb_row = poll_keyboard(keyboard_whitelist)
-                m_row = poll_mouse(mouse_whitelist)
-                gp_row = poll_gamepad(gamepad_whitelist)
-                row = kb_row + m_row + gp_row
-                if not (row.count(0) == len(row)):
-                    csv_writer.writerow(row)
+            kb_row = poll_keyboard(keyboard_whitelist)
+            m_row = poll_mouse(mouse_whitelist)
+            gp_row = poll_gamepad(gamepad_whitelist)
+            row = kb_row + m_row + gp_row
+            if should_capture and not (row.count(0) == len(row)):
+                csv_writer.writerow(row)
             time.sleep(1.0 / polling_rate)
     print('Data collection stopped. Inputs saved.')
 
@@ -246,36 +245,27 @@ class InputDataset(torch.utils.data.Dataset):
 # Models
 # =============================================================================
 class UnsupervisedModel(lightning.LightningModule):
-    def __init__(self, num_features, layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
+    def __init__(self, num_features, hidden_dim, num_layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
         super().__init__()
         self.save_hyperparameters()
         self.sequence_length = sequence_length
         self.learning_rate = learning_rate
 
-        self.encoders = torch.nn.ModuleList()
-        dec_dim = num_features
-        for enc_dim in layers:
-            encoder = torch.nn.LSTM(
-                input_size=dec_dim,
-                hidden_size=enc_dim,
-                batch_first=True,
-                dropout=dropout
-            )
-            self.encoders.append(encoder)
-            dec_dim = enc_dim
-
-        self.decoders = torch.nn.ModuleList()
-        last_enc_dim = layers[-1]
-        for dec_dim in reversed(layers):
-            decoder = torch.nn.LSTM(
-                input_size=last_enc_dim,
-                hidden_size=dec_dim,
-                batch_first=True,
-                dropout=dropout
-            )
-            self.decoders.append(decoder)
-            last_enc_dim = dec_dim
-        self.output_layer = torch.nn.Linear(layers[0], num_features)
+        self.encoder = torch.nn.LSTM(
+            input_size=num_features,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout
+        )
+        self.decoder = torch.nn.LSTM(
+            input_size=hidden_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout
+        )
+        self.output_layer = torch.nn.Linear(hidden_dim, num_features)
 
         self.loss_function = torch.nn.MSELoss()
         self.train_metric_history = []
@@ -292,10 +282,8 @@ class UnsupervisedModel(lightning.LightningModule):
 
     def forward(self, input_sequence):
         output = input_sequence
-        for enc_lstm in self.encoders:
-            output, (hidden_state, cell_state) = enc_lstm(output)
-        for dec_lstm in self.decoders:
-            output, (hidden_state, cell_state) = dec_lstm(output)
+        output, (hidden_state, cell_state) = self.encoder(output)
+        output, (hidden_state, cell_state) = self.decoder(output)
         reconstruction = self.output_layer(output)
         return reconstruction
 
@@ -356,24 +344,20 @@ class UnsupervisedModel(lightning.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
 class SupervisedModel(lightning.LightningModule):
-    def __init__(self, num_features, layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
+    def __init__(self, num_features, hidden_dim, num_layers, learning_rate, dropout, sequence_length, save_dir, trial_number=None):
         super().__init__()
         self.save_hyperparameters()
         self.sequence_length = sequence_length
         self.learning_rate = learning_rate
 
-        self.layers = torch.nn.ModuleList()
-        input_dim = num_features
-        for hidden_dim in layers:
-            layer = torch.nn.LSTM(
-                input_size=input_dim,
-                hidden_size=hidden_dim,
-                batch_first=True,
-                dropout=dropout
-            )
-            self.layers.append(layer)
-            input_dim = hidden_dim
-        self.classifier_layer = torch.nn.Linear(layers[-1], 1)
+        self.lstm= torch.nn.LSTM(
+            input_size=num_features,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout
+        )
+        self.classifier_layer = torch.nn.Linear(hidden_dim, 1)
 
         self.loss_function = torch.nn.BCEWithLogitsLoss()
 
@@ -391,8 +375,7 @@ class SupervisedModel(lightning.LightningModule):
 
     def forward(self, input_sequence):
         output = input_sequence
-        for lstm_layer in self.layers:
-            output, (hidden_state, cell_state) = lstm_layer(output)
+        output, (hidden_state, cell_state) = self.lstm(output)
         last_output = output[:, -1, :]
         class_prediction = self.classifier_layer(last_output).squeeze(1)
         return class_prediction
@@ -459,7 +442,6 @@ class SupervisedModel(lightning.LightningModule):
 # =============================================================================
 def train_model(configuration):
     model_type = configuration['model_type']
-    model_structure = configuration['model_structure']
     sequence_length = configuration['sequence_length']
     tuning_patience = configuration['tuning_patience']
     keyboard_whitelist = configuration['keyboard_whitelist']
@@ -530,24 +512,19 @@ def train_model(configuration):
         batch_size = trial.suggest_int('batch_size', 32, 512, log=True)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
-        if model_structure == []:
-            num_layers = trial.suggest_int('num_layers', 1, 5)
-            layers = []
-            for i in range(num_layers):
-                layer = trial.suggest_int(f'layer{i}_dim', 1, 256, step=15)
-                layers.append(layer)
-        else:
-            num_layers = len(model_structure)
-            layers = model_structure
-
+        
+        hidden_dim = trial.suggest_int(f'hidden_dim', 1, 256, step=15)
+        num_layers = trial.suggest_int('num_layers', 1, 5)
         learning_rate = trial.suggest_float('learning_rate', 0.00001, 0.01, log=True)
         dropout = trial.suggest_float('dropout', 0.0, 0.5, step=0.1)
+        if num_layers == 1:
+            dropout = 0.0
         
         if model_type == 'unsupervised':
             model = UnsupervisedModel(
                 num_features=len(whitelist),
-                layers=layers,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
                 learning_rate=learning_rate,
                 dropout=dropout,
                 sequence_length=sequence_length,
@@ -557,7 +534,8 @@ def train_model(configuration):
         else:
             model = SupervisedModel(
                 num_features=len(whitelist),
-                layers=layers,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
                 learning_rate=learning_rate,
                 dropout=dropout,
                 sequence_length=sequence_length,
@@ -669,7 +647,7 @@ def run_static_analysis(configuration):
 # =============================================================================
 # Live Analysis Mode
 # =============================================================================
-def run_live_analysis(configuration, root):
+def run_live_analysis(configuration):
     kill_key = configuration['kill_key']
     capture_bind = configuration['capture_bind']
     model_type = configuration['model_type']
@@ -680,7 +658,8 @@ def run_live_analysis(configuration, root):
     gamepad_whitelist = configuration['gamepad_whitelist']
     whitelist = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
     
-    x_index, y_index = None
+    x_index = None
+    y_index = None
     for i, feature in enumerate(whitelist):
         if feature == 'deltaX':
             x_index = i
@@ -771,7 +750,7 @@ def main():
     elif mode == 'test':
         run_static_analysis(configuration)
     elif mode == 'deploy':
-        run_live_analysis(configuration, root)
+        run_live_analysis(configuration)
     else:
         print(f'Error: Invalid mode specified in configuration file: {mode}')
     root.destroy()

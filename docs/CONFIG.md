@@ -59,11 +59,6 @@ The mode is set by the `"mode"` key in `config.json`.
   - `"unsupervised"`  
   - `"supervised"`  
 
-- **model_structure**  
-  *Type:* List of neuron counts per layer  
-  *Default:* `[]`  
-  *Description:* Allows the user to manually design the model structure.
-
 - **keyboard_whitelist**  
   *Type:* List of Strings  
   *Recommended:* `["w", "a", "s", "d", "space", "ctrl"]`  
@@ -97,7 +92,7 @@ The mode is set by the `"mode"` key in `config.json`.
 
 - **tuning_patience**  
   *Type:* Integer  
-  *Recommended:* `10`  
+  *Recommended:* `20`  
   *Description:* The number of consecutive pruned tuning trials before early stopping. 
 
 ---

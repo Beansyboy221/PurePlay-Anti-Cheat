@@ -1,13 +1,12 @@
 {
-  "mode": "test",
+  "mode": "collect",
   "kill_key": "\\",
   "capture_bind": "right",
   "model_type": "unsupervised",
-  "model_structure": [],
   "keyboard_whitelist": [],
   "mouse_whitelist": ["deltaX", "deltaY"],
   "gamepad_whitelist": [],
   "polling_rate": 60,
   "sequence_length": 30,
-  "tuning_patience": 10
+  "tuning_patience": 20
 }
