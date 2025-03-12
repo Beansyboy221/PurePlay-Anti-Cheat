@@ -442,7 +442,6 @@ class SupervisedModel(lightning.LightningModule):
 def train_model(configuration):
     model_type = configuration['model_type']
     sequence_length = configuration['sequence_length']
-    tuning_patience = configuration['tuning_patience']
     keyboard_whitelist = configuration['keyboard_whitelist']
     mouse_whitelist = configuration['mouse_whitelist']
     gamepad_whitelist = configuration['gamepad_whitelist']
@@ -509,14 +508,14 @@ def train_model(configuration):
                 study.stop()
 
     def objective(trial):
-        batch_size = trial.suggest_int('batch_size', 32, 512, step=32)
+        batch_size = trial.suggest_int('batch_size', 16, 256, step=30)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         
-        hidden_dim = trial.suggest_int('hidden_dim', 1, 256, step=5)
+        hidden_dim = trial.suggest_int('hidden_dim', 1, 256, log=True)
         num_layers = trial.suggest_int('num_layers', 1, 5)
         learning_rate = trial.suggest_float('learning_rate', 0.00001, 0.01, log=True)
-        dropout = trial.suggest_float('dropout', 0.0, 0.5, step=0.1)
+        dropout = trial.suggest_float('dropout', 0.0, 0.5, log=True)
         if num_layers == 1:
             dropout = 0.0
         
