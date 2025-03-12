@@ -177,40 +177,55 @@ def collect_input_data(configuration):
     gamepad_whitelist = configuration['gamepad_whitelist']
 
     save_directory = tkinter.filedialog.askdirectory(title='Select data save folder')
-    file_name = f"{save_directory}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.csv"
 
     if any(key in mouse_whitelist for key in ('deltaX', 'deltaY')):
         raw_input_thread = threading.Thread(target=listen_for_mouse_movement, daemon=True)
         raw_input_thread.start()
-    
-    with open(file_name, mode='w', newline='') as file_handle:
-        csv_writer = csv.writer(file_handle)
-        header = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
-        csv_writer.writerow(header)
-        print(f'Polling devices for collection (press {kill_key} to stop)...')
-        while True:
-            if keyboard.is_pressed(kill_key):
-                break
-            should_capture = True
-            if capture_bind:
-                should_capture = False
-                try:
-                    if mouse.is_pressed(capture_bind):
-                        should_capture = True
-                except:
-                    pass
-                try:
-                    if keyboard.is_pressed(capture_bind):
-                        should_capture = True
-                except:
-                    pass
-            kb_row = poll_keyboard(keyboard_whitelist)
-            m_row = poll_mouse(mouse_whitelist)
-            gp_row = poll_gamepad(gamepad_whitelist)
-            row = kb_row + m_row + gp_row
-            if should_capture and not (row.count(0) == len(row)):
+
+    header = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
+    is_capturing = False
+    file_handle = None
+    csv_writer = None
+
+    print(f'Polling devices for collection (press {kill_key} to stop)...')
+    while True:
+        if keyboard.is_pressed(kill_key):
+            break
+
+        capture_pressed = False
+        try:
+            if mouse.is_pressed(capture_bind):
+                capture_pressed = True
+        except:
+            pass
+        try:
+            if keyboard.is_pressed(capture_bind):
+                capture_pressed = True
+        except:
+            pass
+
+        kb_row = poll_keyboard(keyboard_whitelist)
+        m_row = poll_mouse(mouse_whitelist)
+        gp_row = poll_gamepad(gamepad_whitelist)
+        row = kb_row + m_row + gp_row
+
+        if capture_pressed and not is_capturing:
+            is_capturing = True
+            file_name = f"{save_directory}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.csv"
+            file_handle = open(file_name, 'w', newline='')
+            csv_writer = csv.writer(file_handle)
+            csv_writer.writerow(header)
+        elif capture_pressed and is_capturing:
+            if any(row):
                 csv_writer.writerow(row)
-            time.sleep(1.0 / polling_rate)
+        elif not capture_pressed and is_capturing:
+            is_capturing = False
+            file_handle.close()
+            file_handle = None
+            csv_writer = None
+        time.sleep(1.0 / polling_rate)
+    if is_capturing:
+        file_handle.close()
     print('Data collection stopped. Inputs saved.')
 
 # =============================================================================
