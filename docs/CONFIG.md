@@ -49,7 +49,7 @@ The mode is set by the `"mode"` key in `config.json`.
 - **capture_bind**  
   *Type:* String  
   *Recommended:* `"right" or "RT"`  
-  *Description:* The button that, when pressed, starts data collection. Can be any button from the keyboard or mouse.
+  *Description:* The button that, when pressed, starts data collection. Can be any button or trigger.
 
 - **model_type**  
   *Type:* String  

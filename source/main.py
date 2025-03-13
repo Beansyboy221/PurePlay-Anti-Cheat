@@ -182,7 +182,7 @@ def collect_input_data(configuration):
     if any(key in mouse_whitelist for key in ('deltaX', 'deltaY')):
         raw_input_thread = threading.Thread(target=listen_for_mouse_movement, daemon=True)
         raw_input_thread.start()
-    
+
     with open(file_name, mode='w', newline='') as file_handle:
         csv_writer = csv.writer(file_handle)
         header = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
@@ -204,6 +204,23 @@ def collect_input_data(configuration):
                         should_capture = True
                 except:
                     pass
+                try:
+                    gamepad_state = XInput.get_state(0)
+                    button_values = XInput.get_button_values(gamepad_state)
+                    if button_values[capture_bind]:
+                        should_capture = True
+                except:
+                    pass
+                try:
+                    gamepad_state = XInput.get_state(0)
+                    trigger_values = XInput.get_trigger_values(gamepad_state)
+                    if capture_bind == 'LT' and trigger_values[0] > 0:
+                        should_capture = True
+                    elif capture_bind == 'RT' and trigger_values[1] > 0:
+                        print('capturing')
+                        should_capture = True
+                except:
+                    pass
             kb_row = poll_keyboard(keyboard_whitelist)
             m_row = poll_mouse(mouse_whitelist)
             gp_row = poll_gamepad(gamepad_whitelist)
@@ -222,10 +239,10 @@ class InputDataset(torch.utils.data.Dataset):
         self.label = label
         data_frame = pandas.read_csv(file_path)
         self.feature_columns = [col for col in whitelist if col in data_frame.columns]
-        if 'deltaX' in self.feature_columns:
-            data_frame['deltaX'] = scaler.fit_transform(data_frame['deltaX'].values.reshape(-1, 1)).flatten()
-        if 'deltaY' in self.feature_columns:
-            data_frame['deltaY'] = scaler.fit_transform(data_frame['deltaY'].values.reshape(-1, 1)).flatten()
+        scale_columns = ['deltaX', 'deltaY', 'LX', 'LY', 'RX', 'RY']
+        for column in scale_columns:
+            if column in self.feature_columns:
+                data_frame[column] = scaler.fit_transform(data_frame[column].values.reshape(-1, 1)).flatten()
         data_array = data_frame[self.feature_columns].values.astype(numpy.float32)
         remainder = len(data_array) % sequence_length
         if remainder != 0:
@@ -528,7 +545,7 @@ def train_model(configuration):
 
         early_stop_callback = lightning.pytorch.callbacks.EarlyStopping(
             monitor='val_loss',
-            min_delta=-1e-8,
+            min_delta=1e-8,
             patience=10,
             mode='min'
         )
@@ -634,15 +651,7 @@ def run_live_analysis(configuration):
     mouse_whitelist = configuration['mouse_whitelist']
     gamepad_whitelist = configuration['gamepad_whitelist']
     whitelist = keyboard_whitelist + mouse_whitelist + gamepad_whitelist
-    
-    x_index = None
-    y_index = None
-    for i, feature in enumerate(whitelist):
-        if feature == 'deltaX':
-            x_index = i
-        if feature == 'deltaY':
-            y_index = i
-    
+
     checkpoint = tkinter.filedialog.askopenfilename(
         title='Select model checkpoint file',
         filetypes=[('Checkpoint Files', '*.ckpt')]
@@ -661,6 +670,8 @@ def run_live_analysis(configuration):
         raw_input_thread.start()
     sequence = []
 
+    scale_columns = ['deltaX', 'deltaY', 'LX', 'LY', 'RX', 'RY']
+    
     print(f'Polling devices for live analysis (press {kill_key} to stop)...')
     while True:
         if keyboard.is_pressed(kill_key):
@@ -687,12 +698,9 @@ def run_live_analysis(configuration):
                 sequence.append(row)
 
         if len(sequence) >= sequence_length:
-            if x_index is not None:
-                for row in sequence:
-                    row[x_index] = scaler.fit_transform(numpy.array(row[x_index]).reshape(-1, 1)).flatten()
-            if y_index is not None:
-                for row in sequence:
-                    row[y_index] = scaler.fit_transform(numpy.array(row[y_index]).reshape(-1, 1)).flatten()
+            for i, column in enumerate(whitelist):
+                if column in scale_columns:
+                    row[i] = scaler.fit_transform(numpy.array(i).reshape(-1, 1)).flatten()
             input_sequence = torch.tensor([sequence[-sequence_length:]], dtype=torch.float32, device=device)
             if model_type == 'unsupervised':
                 reconstruction = model(input_sequence)

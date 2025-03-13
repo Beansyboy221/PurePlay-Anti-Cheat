@@ -1,11 +1,11 @@
 {
-  "mode": "test",
+  "mode": "collect",
   "kill_key": "\\",
-  "capture_bind": "right",
+  "capture_bind": "RT",
   "model_type": "unsupervised",
   "keyboard_whitelist": [],
-  "mouse_whitelist": ["deltaX", "deltaY"],
-  "gamepad_whitelist": [],
+  "mouse_whitelist": [],
+  "gamepad_whitelist": ["LT", "RT", "LX", "LY", "RX", "RY"],
   "polling_rate": 60,
   "sequence_length": 30,
   "batch_size": 16
