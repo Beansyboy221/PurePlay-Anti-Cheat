@@ -217,7 +217,6 @@ def collect_input_data(configuration):
                     if capture_bind == 'LT' and trigger_values[0] > 0:
                         should_capture = True
                     elif capture_bind == 'RT' and trigger_values[1] > 0:
-                        print('capturing')
                         should_capture = True
                 except:
                     pass
@@ -700,7 +699,7 @@ def run_live_analysis(configuration):
         if len(sequence) >= sequence_length:
             for i, column in enumerate(whitelist):
                 if column in scale_columns:
-                    row[i] = scaler.fit_transform(numpy.array(i).reshape(-1, 1)).flatten()
+                    row[i] = scaler.fit_transform(numpy.array(row[i]).reshape(-1, 1)).flatten()
             input_sequence = torch.tensor([sequence[-sequence_length:]], dtype=torch.float32, device=device)
             if model_type == 'unsupervised':
                 reconstruction = model(input_sequence)

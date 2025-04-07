@@ -1,11 +1,11 @@
 {
-  "mode": "collect",
+  "mode": "test",
   "kill_key": "\\",
   "capture_bind": "RT",
-  "model_type": "unsupervised",
+  "model_type": "supervised",
   "keyboard_whitelist": [],
   "mouse_whitelist": [],
-  "gamepad_whitelist": ["LT", "RT", "LX", "LY", "RX", "RY"],
+  "gamepad_whitelist": ["LT", "LX", "LY", "RX", "RY"],
   "polling_rate": 60,
   "sequence_length": 30,
   "batch_size": 16
