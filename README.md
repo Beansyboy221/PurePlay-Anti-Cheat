@@ -1,6 +1,6 @@
 # PurePlay-Anti-Cheat
 **Free, Open-Source Anti-Cheat for Competitive Game Developers**
-- *Note: This project is in development and hasn't been optimized for deployment alongside games*
+- *Note: This project is in development and hasn't been optimized for deployment alongside games.*
 
 ## Project Overview
 **PurePlay Anti-Cheat** is an easy-to-implement, open-source anticheat solution designed to help game developers detect anomalous inputs across GamePad, Mouse, and Keyboard. By leveraging trained neural networks, the anti-cheat program can identify input sources using external devices or software cheats such as Xim, Cronus, or custom Arduino-based setups.
