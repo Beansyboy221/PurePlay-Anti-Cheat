@@ -146,13 +146,10 @@ The training and evaluation process generates three distinct types of graphs. Ea
 - **What It Shows:**  
   This graph presents the `"supervised"` model’s confidence (or probability) that the player is cheating.
 - **How to Interpret:**  
-  The higher the graph, the higher the confidence that the player is cheating. You may want to determine a threshold for automatic flagging.
+  The higher the line, the higher the confidence that the player is cheating. You may want to determine a threshold for automatic flagging.
 - **Use Case:**  
   As a supervised approach, this is useful for when you can isolate and identify specific cheating input patterns.
-
-*REMEMBER TO INSERT EXAMPLE GRAPHS HERE!!!*  
-*The visuals should illustrate examples of normal behavior versus potential issues—such as consistent low prediction loss, effective reconstruction, or appropriate confidence levels—and include annotations to guide interpretation.*
-
+  
 ---
 
 ## 5. Best Practices for Intelligent Training
