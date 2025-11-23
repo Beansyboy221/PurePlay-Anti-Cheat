@@ -69,7 +69,7 @@ def _get_config_from_gui() -> dict | None:
 
     # Mode
     tkinter.ttk.Label(frame, text="Mode:").grid(column=0, row=0, sticky=tkinter.W)
-    mode_menu = tkinter.ttk.OptionMenu(frame, variable=mode_var, default='collect', values=('collect', 'train', 'analyze'))
+    mode_menu = tkinter.ttk.OptionMenu(frame, variable=mode_var, default='collect', values=('collect', 'train', 'test', 'deploy'))
     mode_menu.grid(column=1, row=0, sticky=(tkinter.W, tkinter.E))
     mode_var.trace_add('write', on_mode_change)
 
