@@ -95,8 +95,7 @@ def listen_for_mouse_movement() -> None:
 # Helper Function to Poll Keyboard
 # =============================================================================
 def poll_keyboard(keyboard_whitelist: list) -> list:
-    row = [1 if keyboard.is_pressed(key) else 0 for key in keyboard_whitelist]
-    return row
+    return [1 if keyboard.is_pressed(key) else 0 for key in keyboard_whitelist]
 
 # =============================================================================
 # Helper Function to Poll Mouse
