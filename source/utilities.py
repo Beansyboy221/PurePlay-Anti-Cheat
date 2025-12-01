@@ -228,34 +228,33 @@ class InputDataset(torch.utils.data.Dataset):
         self.sequence_length = sequence_length
         self.label = label
         
-        data_frame = self._load_data(file_path)
-        self.feature_columns = self._get_feature_columns(data_frame, whitelist)
-        data_frame = self._scale_features(data_frame)
-        data_array = self._to_numpy_array(data_frame)
-        data_array = self._trim_to_sequence_length(data_array)
+        data_frame = self.load_data(file_path)
+        self.feature_columns = self.get_feature_columns(data_frame, whitelist)
+        data_frame = self.scale_features(data_frame)
+        data_array = self.to_numpy_array(data_frame)
+        data_array = self.trim_to_sequence_length(data_array)
         self.data_tensor = torch.from_numpy(data_array)
 
-    def _load_data(self, file_path: str) -> pandas.DataFrame:
+    def load_data(self, file_path: str) -> pandas.DataFrame:
         """Loads data from a CSV file into a pandas DataFrame."""
         return pandas.read_csv(file_path)
 
-    def _get_feature_columns(self, data_frame: pandas.DataFrame, whitelist: list[str]) -> list[str]:
+    def get_feature_columns(self, data_frame: pandas.DataFrame, whitelist: list[str]) -> list[str]:
         """Filters DataFrame columns based on a whitelist."""
         return [col for col in whitelist if col in data_frame.columns]
 
-    def _scale_features(self, data_frame: pandas.DataFrame) -> pandas.DataFrame:
+    def scale_features(self, data_frame: pandas.DataFrame) -> pandas.DataFrame:
         """Scales specified columns of the DataFrame."""
-        scale_columns = ['deltaX', 'deltaY', 'LX', 'LY', 'RX', 'RY']
-        columns_to_scale = [col for col in scale_columns if col in self.feature_columns]
-        if columns_to_scale:
-            data_frame.loc[:, columns_to_scale] = SCALER.transform(data_frame[columns_to_scale])
+        scalable_columns = [col for col in SCALE_COLUMNS if col in self.feature_columns]
+        if scalable_columns:
+            data_frame.loc[:, scalable_columns] = SCALER.transform(data_frame[scalable_columns])
         return data_frame
 
-    def _to_numpy_array(self, data_frame: pandas.DataFrame) -> numpy.ndarray:
+    def to_numpy_array(self, data_frame: pandas.DataFrame) -> numpy.ndarray:
         """Converts the DataFrame to a NumPy array of float32."""
         return data_frame[self.feature_columns].values.astype(numpy.float32)
 
-    def _trim_to_sequence_length(self, data_array: numpy.ndarray) -> numpy.ndarray:
+    def trim_to_sequence_length(self, data_array: numpy.ndarray) -> numpy.ndarray:
         """Trims the array to be divisible by the sequence length."""
         remainder = len(data_array) % self.sequence_length
         if remainder != 0:

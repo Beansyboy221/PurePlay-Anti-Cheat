@@ -72,7 +72,7 @@ if %errorlevel%==0 (
 )
 
 echo Creating new environment...
-call "%CONDA_PATH%" create -y -q -n PurePlay-Anti-Cheat python
+call "%CONDA_PATH%" create -y -q -n PurePlay-Anti-Cheat python=3.11
 if errorlevel 1 (
     echo Failed to create the environment.
     pause
@@ -90,11 +90,7 @@ if errorlevel 1 (
 )
 
 echo Installing conda packages...
-<<<<<<< HEAD
 call "%CONDA_PATH%" install -y -q pytorch-gpu lightning pandas matplotlib optuna optuna-integration pywin32 scikit-learn
-=======
-call "%CONDA_PATH%" install -y -q pytorch-gpu lightning pandas matplotlib optuna cmaes scipy
->>>>>>> b9420edbcac8ebb881d17a57c2128534c5d77225
 if errorlevel 1 (
     echo Failed to install conda packages.
     pause
@@ -102,11 +98,7 @@ if errorlevel 1 (
 )
 
 echo Installing pip packages...
-<<<<<<< HEAD
 call pip install XInput-Python keyboard mouse
-=======
-call pip install XInput-Python keyboard mouse optunahub
->>>>>>> b9420edbcac8ebb881d17a57c2128534c5d77225
 if errorlevel 1 (
     echo Failed to install pip packages.
     pause
