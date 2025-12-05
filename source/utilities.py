@@ -1,5 +1,6 @@
 import sklearn.preprocessing
 import tkinter.filedialog
+import tkinter.ttk
 import threading
 import keyboard
 import win32gui
@@ -10,18 +11,19 @@ import ctypes
 import torch
 import numpy
 import mouse
+import json
 import time
+import os
 import models
 
 # =============================================================================
 # Data Scaler
 # =============================================================================
 SCALER = sklearn.preprocessing.StandardScaler()
-SCALE_COLUMNS = ['deltaX', 'deltaY', 'LX', 'LY', 'RX', 'RY']
 
 def fit_global_scaler(files: list[str], whitelist: list[str]) -> None:
     """Fits the global scaler on the given files."""
-    scalable_columns = [col for col in SCALE_COLUMNS if col in whitelist]
+    scalable_columns = [col for col in SCALABLE_FEATURES if col in whitelist]
     if not scalable_columns:
         return
 
@@ -168,25 +170,6 @@ def poll_gamepad(gamepad_whitelist: list) -> list:
 def poll_all_devices(keyboard_whitelist: list, mouse_whitelist: list, gamepad_whitelist: list) -> list:
     return poll_keyboard(keyboard_whitelist) + poll_mouse(mouse_whitelist) + poll_gamepad(gamepad_whitelist)
 
-# =============================================================================
-# Common Functions
-# =============================================================================
-def prompt_for_csv_files(message: str) -> list[str]:
-    """Prompts the user to select CSV files and returns the list of selected file paths."""
-    files = tkinter.filedialog.askopenfilenames(
-        title=message,
-        filetypes=[('CSV Files', '*.csv')]
-    )
-    return files
-
-def prompt_for_checkpoint_file() -> str:
-    """Prompts the user to select a model checkpoint file and returns the file path."""
-    checkpoint = tkinter.filedialog.askopenfilename(
-        title='Select model checkpoint file',
-        filetypes=[('Checkpoint Files', '*.ckpt')]
-    )
-    return checkpoint
-
 def is_pressed(capture_bind: str) -> bool:
     """Determines whether data capture should occur based on the capture bind."""
     if not capture_bind:
@@ -219,6 +202,9 @@ def is_pressed(capture_bind: str) -> bool:
         pass
     return False
 
+def row_is_empty(row: list):
+    return not row.count(0) == len(row)
+
 # =============================================================================
 # Utility Classes
 # =============================================================================
@@ -245,7 +231,7 @@ class InputDataset(torch.utils.data.Dataset):
 
     def scale_features(self, data_frame: pandas.DataFrame) -> pandas.DataFrame:
         """Scales specified columns of the DataFrame."""
-        scalable_columns = [col for col in SCALE_COLUMNS if col in self.feature_columns]
+        scalable_columns = [col for col in SCALABLE_FEATURES if col in self.feature_columns]
         if scalable_columns:
             data_frame.loc[:, scalable_columns] = SCALER.transform(data_frame[scalable_columns])
         return data_frame
@@ -268,198 +254,110 @@ class InputDataset(torch.utils.data.Dataset):
         start_idx = idx * self.sequence_length
         seq = self.data_tensor[start_idx : start_idx + self.sequence_length]
         return seq, torch.tensor(self.label, dtype=torch.float32)
-    
+
 # =============================================================================
-# Configuration GUI
+# Configuration
 # =============================================================================
-def get_config_from_gui() -> dict | None:
-    """Displays a GUI to get configuration from the user."""
-    config = {}
-    available_models = models.get_available_models()
+KEY_BINDS = (
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 
+        'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '-', '*', 
+        '/', '.', ',', '<', '>', '?', '!', '@', '#', '$', '%', '^', '&', 
+        '*', '(', ')', '_', '=', '{', '}', '[', ']', '|', '\\', ':', ';', 
+        ' ', '~', 'enter', 'esc', 'backspace', 'tab', 'space', 'caps lock', 
+        'num lock', 'scroll lock', 'home', 'end', 'page up', 'page down', 
+        'insert', 'delete', 'left', 'right', 'up', 'down', 'f1', 'f2', 'f3', 
+        'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', 'print screen', 
+        'pause', 'break', 'windows', 'menu', 'right alt', 'ctrl', 
+        'left shift', 'right shift', 'left windows', 'left alt', 'right windows', 
+        'alt gr', 'windows', 'alt', 'shift', 'right ctrl', 'left ctrl'
+    )
+MOUSE_BINDS = ('left', 'right', 'middle', 'x', 'x2', 'deltaX', 'deltaY')
+GAMEPAD_BINDS = (
+        'DPAD_UP', 'DPAD_DOWN', 'DPAD_LEFT', 'DPAD_RIGHT', 'START', 'BACK', 
+        'LEFT_THUMB', 'RIGHT_THUMB', 'LEFT_SHOULDER', 'RIGHT_SHOULDER', 
+        'A', 'B', 'X', 'Y', 'LT', 'RT', 'LX', 'LY', 'RX', 'RY'
+    )
+SCALABLE_FEATURES = ('deltaX', 'deltaY', 'LX', 'LY', 'RX', 'RY')
+BINDABLE_FEATURES = [feature for feature in (KEY_BINDS + MOUSE_BINDS + GAMEPAD_BINDS) if feature not in SCALABLE_FEATURES]
+INPUT_GATES = ('ANY', 'ALL')
 
-    def browse_save_dir():
-        directory = tkinter.filedialog.askdirectory()
-        if directory:
-            save_dir_var.set(directory)
+def get_config_from_gui() -> dict:
+    return json.load(tkinter.filedialog.askopenfile(title='Select configuration file', filetypes=[('JSON Files', '*.json')]))
 
-    def on_submit():
-        nonlocal config
-        config['mode'] = mode_var.get()
-        config['kill_bind'] = kill_bind_var.get()
-        config['capture_bind'] = capture_bind_var.get()
-        config['keyboard_whitelist'] = [item.strip() for item in keyboard_whitelist_var.get().split(',') if item.strip()]
-        config['mouse_whitelist'] = [item.strip() for item in mouse_whitelist_var.get().split(',') if item.strip()]
-        config['gamepad_whitelist'] = [item.strip() for item in gamepad_whitelist_var.get().split(',') if item.strip()]
-        config['model_class'] = available_models.get(model_var.get())
-        config['training_files'] = training_files_var.get()
-        config['validation_files'] = validation_files_var.get()
-        config['cheat_training_files'] = cheat_training_files_var.get()
-        config['cheat_validation_files'] = cheat_validation_files_var.get()
-        config['testing_files'] = testing_files_var.get()
-        config['live_graphing'] = live_graphing_var.get()
-        config['save_dir'] = save_dir_var.get()
+def get_model_class_from_gui(config: dict) -> None:
+    root = tkinter.Tk()
+    root.withdraw()
+    frame = tkinter.ttk.Frame(padding=5).pack()
+    tkinter.ttk.Label(frame, text='Select model class:').pack()
+    combo_box = tkinter.ttk.Combobox(frame, values=list(models.AVAILABLE_MODELS.keys())).pack()
+    tkinter.ttk.Button(frame, text='OK', command=save_and_exit).pack()
+    root.mainloop()
 
-        try:
-            config['polling_rate'] = int(polling_rate_var.get())
-            config['sequence_length'] = int(sequence_length_var.get())
-            config['batch_size'] = int(batch_size_var.get())
-        except ValueError:
-            print("Polling rate, sequence length, and batch size must be integers.")
-            config = {} # Invalidate config
-            win.destroy()
-            return
+    def save_and_exit():
+        config['model_class'] = models.AVAILABLE_MODELS[combo_box.get()]
+        root.destroy()
 
-        win.destroy()
+def get_model_file_from_gui(config: dict) -> None:
+    config['model_file'] = tkinter.filedialog.askopenfilename(title='Select model file', filetypes=[('Checkpoint Files', '*.ckpt')])
 
-        with open(f"{config['save_dir']}/config-{time.strftime('%Y%m%d-%H%M%S')}.txt", 'w') as f:
-            for key, value in config.items():
-                f.write(f"{key}: {value}\n")
-        
-        print(f"Configuration saved to ${config['save_dir']}/config-{time.strftime('%Y%m%d-%H%M%S')}.txt")
+def get_training_files_from_gui(config: dict) -> None:
+    config['training_files'] = tkinter.filedialog.askopenfilenames(title='Select training files', filetypes=[('CSV Files', '*.csv')])
+    if not config['model_class']:
+        return
+    if config['model_class'].training_type == 'supervised':
+        config['cheat_training_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat training files', filetypes=[('CSV Files', '*.csv')])
 
-    def on_mode_change(*args):
-        match (mode_var.get()):
-            case 'train':
-                # Enable training and validation files selection
-                train_files_button.config(state='normal')
-                val_files_button.config(state='normal')
-                test_files_button.config(state='disabled')
-                model_menu.config(state='normal')
-                if available_models:
-                    model_var.set(list(available_models.keys())[0])
-            case 'test':
-                train_files_button.config(state='disabled')
-                val_files_button.config(state='disabled')
-                test_files_button.config(state='normal')
-                model_menu.config(state='normal')
-                if available_models:
-                    model_var.set(list(available_models.keys())[0])
-            case 'deploy':
-                train_files_button.config(state='disabled')
-                val_files_button.config(state='disabled')
-                test_files_button.config(state='disabled')
-                model_menu.config(state='normal')
-                if available_models:
-                    model_var.set(list(available_models.keys())[0])
-            case _:
-                train_files_button.config(state='disabled')
-                val_files_button.config(state='disabled')
-                test_files_button.config(state='disabled')
-                model_menu.config(state='disabled')
-    
-    def on_model_change(*args):
-        if model_var.get():
-            model_class = available_models.get(model_var.get())
-            if model_class.training_type == 'supervised':
-                cheat_training_files_button.config(state='normal')
-                cheat_validation_files_button.config(state='normal')
-            else:
-                cheat_training_files_button.config(state='disabled')
-                cheat_validation_files_button.config(state='disabled')
+def get_validation_files_from_gui(config: dict) -> None:
+    config['validation_files'] = tkinter.filedialog.askopenfilenames(title='Select validation files', filetypes=[('CSV Files', '*.csv')])
+    if not config['model_class']:
+        return
+    if config['model_class'].training_type == 'supervised':
+        config['cheat_validation_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat validation files', filetypes=[('CSV Files', '*.csv')])
 
+def get_testing_files_from_gui(config: dict) -> None:
+    config['testing_files'] = tkinter.filedialog.askopenfilenames(title='Select testing files', filetypes=[('CSV Files', '*.csv')])
 
-    win = tkinter.Toplevel()
-    win.title("Configuration")
+def validate_config(config: dict) -> bool:
+    list_validations = {
+        'keyboard_whitelist': KEY_BINDS,
+        'mouse_whitelist': MOUSE_BINDS,
+        'gamepad_whitelist': GAMEPAD_BINDS,
+        'kill_bind_list': BINDABLE_FEATURES,
+        'capture_bind_list': BINDABLE_FEATURES,
+    }
 
-    # --- Variables ---
-    mode_var = tkinter.StringVar(value='collect')
-    kill_bind_var = tkinter.StringVar(value='\\')
-    capture_bind_var = tkinter.StringVar(value='RT')
-    keyboard_whitelist_var = tkinter.StringVar(value='')
-    mouse_whitelist_var = tkinter.StringVar(value='deltaX, deltaY')
-    gamepad_whitelist_var = tkinter.StringVar(value='LT, LX, LY, RX, RY')
-    polling_rate_var = tkinter.StringVar(value='60')
-    sequence_length_var = tkinter.StringVar(value='30')
-    batch_size_var = tkinter.StringVar(value='16')
-    model_var = tkinter.StringVar(value=list(available_models.keys())[0] if available_models else '')
-    training_files_var = tkinter.StringVar(value=())
-    validation_files_var = tkinter.StringVar(value=())
-    cheat_training_files_var = tkinter.StringVar(value=())
-    cheat_validation_files_var = tkinter.StringVar(value=())
-    testing_files_var = tkinter.StringVar(value=())
-    live_graphing_var = tkinter.BooleanVar(value=False)
-    save_dir_var = tkinter.StringVar(value='output/')
+    for key, allowed in list_validations.items():
+        for bind in config.get(key, []):
+            if bind not in allowed:
+                print(f'Invalid {key[:-10] if key.endswith("_whitelist") else key} bind: {bind}')
+                return False
 
-    # --- Widgets ---
-    frame = tkinter.ttk.Frame(win, padding="10")
-    frame.grid(row=0, column=0, sticky=(tkinter.W, tkinter.E, tkinter.N, tkinter.S))
+    if config.get('kill_bind_logic') not in INPUT_GATES:
+        print('Invalid kill bind logic')
+        return False
 
-    # Mode
-    tkinter.ttk.Label(frame, text="Mode:").grid(column=0, row=0, sticky=tkinter.W)
-    mode_menu = tkinter.ttk.OptionMenu(frame, variable=mode_var, default='collect', values=('collect', 'train', 'test', 'deploy'))
-    mode_menu.grid(column=1, row=0, sticky=(tkinter.W, tkinter.E))
-    mode_var.trace_add('write', on_mode_change)
+    if config.get('capture_bind_logic') not in INPUT_GATES:
+        print('Invalid capture bind logic')
+        return False
 
-    # Model
-    tkinter.ttk.Label(frame, text="Model:").grid(column=0, row=1, sticky=tkinter.W)
-    model_menu = tkinter.ttk.OptionMenu(frame, variable=model_var, default=model_var.get(), values=list(available_models.keys()))
-    model_menu.config(*available_models.keys())
-    model_menu.grid(column=1, row=1, sticky=(tkinter.W, tkinter.E))
-    model_var.trace_add('write', on_model_change)
+    if config.get('model_class') not in models.get_available_models().values():
+        print('Invalid model class')
+        return False
 
-    # File Selections
-    tkinter.ttk.Label(frame, text="Training Files:").grid(column=0, row=1, sticky=tkinter.W)
-    train_files_button = tkinter.ttk.Button(frame, text="Browse", command=lambda: training_files_var.set(prompt_for_csv_files('Select Training Files'))).grid(column=1, row=1, sticky=tkinter.W)
-    
-    tkinter.ttk.Label(frame, text="Validation Files:").grid(column=0, row=2, sticky=tkinter.W)
-    val_files_button = tkinter.ttk.Button(frame, text="Browse", command=lambda: validation_files_var.set(prompt_for_csv_files('Select Validation Files'))).grid(column=1, row=2, sticky=tkinter.W)
+    file_keys = [
+        'model_file',
+        'training_files',
+        'validation_files',
+        'cheat_training_files',
+        'cheat_validation_files',
+        'testing_files'
+    ]
 
-    tkinter.ttk.Label(frame, text="Cheat Training Files:").grid(column=0, row=3, sticky=tkinter.W)
-    cheat_training_files_button = tkinter.ttk.Button(frame, text="Browse", command=lambda: cheat_training_files_var.set(prompt_for_csv_files('Select Cheat Training Files'))).grid(column=1, row=3, sticky=tkinter.W)
+    for key in file_keys:
+        for path in config.get(key, []):
+            if not os.path.isfile(path):
+                print(f'Invalid file in {key}: {path}')
+                return False
 
-    tkinter.ttk.Label(frame, text="Cheat Validation Files:").grid(column=0, row=4, sticky=tkinter.W)
-    cheat_validation_files_button = tkinter.ttk.Button(frame, text="Browse", command=lambda: cheat_validation_files_var.set(prompt_for_csv_files('Select Cheat Validation Files'))).grid(column=1, row=4, sticky=tkinter.W)
-
-    tkinter.ttk.Label(frame, text="Testing Files:").grid(column=0, row=3, sticky=tkinter.W)
-    test_files_button = tkinter.ttk.Button(frame, text="Browse", command=lambda: testing_files_var.set(prompt_for_csv_files('Select Testing Files'))).grid(column=1, row=3, sticky=tkinter.W)
-
-    # Live Graphing
-    tkinter.ttk.Label(frame, text="Live Graphing:").grid(column=0, row=2, sticky=tkinter.W)
-    live_graphing_check = tkinter.ttk.Checkbutton(frame, variable=live_graphing_var)
-    live_graphing_check.grid(column=1, row=2, sticky=tkinter.W)
-
-    # Kill Key
-    tkinter.ttk.Label(frame, text="Kill Bind:").grid(column=0, row=1, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=kill_bind_var).grid(column=1, row=1, sticky=(tkinter.W, tkinter.E))
-
-    # Capture Bind
-    tkinter.ttk.Label(frame, text="Capture Bind:").grid(column=0, row=2, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=capture_bind_var).grid(column=1, row=2, sticky=(tkinter.W, tkinter.E))
-
-    # Whitelists (comma-separated)
-    tkinter.ttk.Label(frame, text="Keyboard Whitelist (csv):").grid(column=0, row=3, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=keyboard_whitelist_var).grid(column=1, row=3, sticky=(tkinter.W, tkinter.E))
-
-    tkinter.ttk.Label(frame, text="Mouse Whitelist (csv):").grid(column=0, row=4, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=mouse_whitelist_var).grid(column=1, row=4, sticky=(tkinter.W, tkinter.E))
-
-    tkinter.ttk.Label(frame, text="Gamepad Whitelist (csv):").grid(column=0, row=5, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=gamepad_whitelist_var).grid(column=1, row=5, sticky=(tkinter.W, tkinter.E))
-
-    # Numerical settings
-    tkinter.ttk.Label(frame, text="Polling Rate (Hz):").grid(column=0, row=6, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=polling_rate_var).grid(column=1, row=6, sticky=(tkinter.W, tkinter.E))
-
-    tkinter.ttk.Label(frame, text="Sequence Length:").grid(column=0, row=7, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=sequence_length_var).grid(column=1, row=7, sticky=(tkinter.W, tkinter.E))
-
-    tkinter.ttk.Label(frame, text="Batch Size:").grid(column=0, row=8, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=batch_size_var).grid(column=1, row=8, sticky=(tkinter.W, tkinter.E))
-
-    # Save Directory
-    tkinter.ttk.Label(frame, text="Save Directory:").grid(column=0, row=9, sticky=tkinter.W)
-    tkinter.ttk.Entry(frame, textvariable=save_dir_var).grid(column=1, row=9, sticky=(tkinter.W, tkinter.E))
-    browse_button = tkinter.ttk.Button(frame, text="Browse", command=browse_save_dir)
-    browse_button.grid(column=2, row=9, sticky=tkinter.W)
-
-    # Submit Button
-    submit_button = tkinter.ttk.Button(frame, text="Submit", command=on_submit)
-    submit_button.grid(column=1, row=10, sticky=tkinter.E, pady=10)
-
-    frame.columnconfigure(1, weight=1)
-
-    on_mode_change()
-
-    win.wait_window()
-
-    return config if config else None
+    return True

@@ -1,24 +1,31 @@
 import matplotlib.pyplot
 import torch.utils.data
 import lightning
-import keyboard
 import logging
 import optuna
 import time
 import utilities
 
 class KillKeyCallback:
-    """Optuna callback to stop a study when a specific key is pressed."""
-    def __init__(self, stop_key='q'):
-        self.stop_key = stop_key
+    """Optuna callback to stop a study when certain keys are pressed."""
+    def __init__(self, kill_bind_list: list[str], kill_bind_logic: str):
+        self.kill_bind_list = kill_bind_list
+        self.kill_bind_logic = kill_bind_logic
         self.stop_flag = False
-        keyboard.add_hotkey(self.stop_key, self.stop)
 
     def stop(self):
-        print(f"Stopping study. Finishing current trial...")
+        print("Stopping study. Finishing current trial...")
         self.stop_flag = True
 
     def __call__(self, study: optuna.Study, trial: optuna.Trial):
+        if not self.stop_flag:
+            pressed_binds = [b for b in self.kill_bind_list if utilities.is_pressed(b)]
+            if self.kill_bind_logic == "ANY":
+                if any(pressed_binds):
+                    self.stop()
+            else:
+                if len(pressed_binds) == len(self.kill_bind_list):
+                    self.stop()
         if self.stop_flag:
             study.stop()
 
@@ -109,7 +116,6 @@ def train_model(config: dict) -> None:
     if not train_loader or not val_loader:
         return print('Dataset loading cancelled. Exiting...')
 
-    # Tuning and Training
     logging.getLogger('lightning.pytorch').setLevel(logging.ERROR)
 
     study = optuna.create_study(
@@ -120,7 +126,7 @@ def train_model(config: dict) -> None:
     study.optimize(
         lambda trial: objective(trial, config, train_loader, val_loader),
         n_trials=2048,
-        callbacks=[KillKeyCallback(config['kill_bind'])],
+        callbacks=[KillKeyCallback(config['kill_bind_list'], config['kill_bind_logic'])],
         gc_after_trial=True
     )
     

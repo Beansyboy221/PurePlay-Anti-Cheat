@@ -1,61 +1,118 @@
-# Updated Configuration Guide
+# Configuration Guide
 
-This document provides an overview of the configuration options, input data properties, and training parameters used by the system.
+This document provides an overview of the configuration options, input data properties, and training parameters used by the system. It is organized around four primary modes of operation. The configuration is defined in a JSON file. An example config file is included in the repository as `config.json`.
 
 ---
 
-## 1 Configuration Options
+## 1. Overview
 
-- **Mode**  
+The system operates in one of four modes:
+
+- **Data Collection (`"collect"`):**  
+  Captures input data from keyboard, mouse, and gamepad devices at a specified polling rate and saves the data as CSV files.
+
+- **Model Training (`"train"`):**  
+  Loads one or more CSV files containing input sequences and trains a model. Supported model types include:
+  - **Unsupervised:** Reconstructs input sequences given lots non-cheating data.
+  - **Supervised:** Classifies input sequences given lots of negative and positive data.
+
+- **Static Analysis (`"test"`):**  
+  Uses a pre-trained model to analyze a selected CSV file, computes relevant metrics (such as reconstruction error, classification confidence, or prediction loss), and generates a report graph.
+
+- **Live Analysis (`"deploy"`):**  
+  Continuously polls the input devices in real time, accumulates sequences, processes them using a pre-trained model, and prints a stream of metrics for external analysis.
+
+The mode is set by the `"mode"` key in a config json file.
+
+---
+
+## 2. Configuration Options
+
+- **mode**  
   *Type:* String  
   *Description:* Selects the operational mode.  
   *Possible Values:*  
-  - `collect` — Collect input data live from the user.
-  - `train` — Train your model on collected data files.
-  - `test` — Test your model on one or more test files.
-  - `deploy` — Analyze live inputs with the selected model.
+  - `"collect"` — Data Collection Mode  
+  - `"train"` — Model Training Mode  
+  - `"test"` — Static Analysis Mode  
+  - `"deploy"` — Live Analysis Mode  
 
-- **Kill Bind**  
-  *Recommended:* `\\`  
-  *Description:* The button that, when pressed, stops the program. Can be any button or trigger.
+- **model_class**
+  *Type:* Models.BaseModel subclass
+  *Description:* Selects the model class you wish to train.
+  *Possible Values:*  
+  - See `models.py`. Can be selected via GUI.
 
-- **Capture Bind**  
-  *Recommended:* `left or LT`  
-  *Description:* The button that, when pressed, starts data collection. Can be any button or trigger.
+- **model_file**
+  *Type:* Path
+  *Description:* Selects the model file you wish to use for testing/deployment.
+  *Possible Values:*  
+  - Can be selected via GUI.
 
-- **Model Class**  
-  *Recommended:* `TBD`  
-  *Description:* The internal model used for training and testing.  
+- **kill_bind_list**  
+  *Type:* String
+  *Recommended:* `"\\"`  
+  *Description:* The bind that, when pressed, stops the program. For possible values, see all whitelists.
 
-- **Keyboard Whitelist**  
-  *Recommended:* `w,a,s,d,space,ctrl`  
-  *Description:* Comma separated list of keyboard keys to capture during collection and live analysis.  
+- **kill_bind_logic**  
+  *Type:* String
+  *Recommended:* `"\\"`  
+  *Description:* Determines whether any or all of the binds must be pressed to stop the program.
+  *Possible Values:*  
+  - `ANY`
+  - `ALL`
+
+- **capture_bind_list**  
+  *Type:* String
+  *Recommended:* `"right"`
+  *Description:* The bind that, when pressed, starts data collection. Can be any button from the keyboard or mouse.
+
+- **capture_bind_logic**  
+  *Type:* String
+  *Description:* Determines whether any or all of the binds must be pressed to start capturing inputs.
+  - `ANY`
+  - `ALL`
+
+- **keyboard_whitelist**  
+  *Type:* List of Strings  
+  *Recommended:* `["w", "a", "s", "d", "space", "ctrl"]`  
+  *Description:* List of keyboard keys to capture during collection and live analysis.  
   *Possible Values:*  
     `a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, +, -, *, /, ., ,, <, >, ?, !, @, #, $, %, ^, &, *, (, ), _, =, {, }, [, ], |, \\, :, ;, , , ~, enter, esc, backspace, tab, space, caps lock, num lock, scroll lock, home, end, page up, page down, insert, delete, left, right, up, down, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, print screen, pause, break, windows, menu, right alt, ctrl, left shift, right shift, left windows, left alt, right windows, alt gr, windows, alt, shift, right ctrl, left ctrl`
 
-- **Mouse Whitelist**  
-  *Recommended:* `left, right, deltaX, deltaY`  
+- **mouse_whitelist**  
+  *Type:* List of Strings  
+  *Recommended:* `["deltaX", "deltaY"]`  
   *Description:* List of mouse features to capture.  
   *Possible Values:*  
-    `left, right, middle, x, x2, deltaX, deltaY`
+    `left, right, middle, x, x2, deltaX, deltaY`  
 
-- **Gamepad Whitelist**  
-  *Recommended:* `LT,RT,LX,LY,RX,RY`  
+- **gamepad_whitelist**  
+  *Type:* List of Strings  
+  *Recommended:* `["LT", "RT", "LX", "LY", "RX", "RY"]`  
   *Description:* List of gamepad buttons/features to capture.  
   *Possible Values:*  
     `DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, START, BACK, LEFT_THUMB, RIGHT_THUMB, LEFT_SHOULDER, RIGHT_SHOULDER, A, B, X, Y, LT, RT, LX, LY, RX, RY`
 
-- **Polling Rate**  
-  *Recommended:* `TBD`  
+- **polling_rate**  
+  *Type:* Integer (Hz)  
+  *Recommended:* `90`  
   *Description:* The frequency at which keyboard, mouse, and gamepad inputs are polled.
 
-- **Sequence Length**  
-  *Recommended:* `TBD`  
+- **ignore_empty_polls**
+  *Type:* Boolean
+  *Recommended:* `true`  
+  *Description:* Whether or not to save empty input polls.
+
+- **sequence_length**  
+  *Type:* Integer  
+  *Recommended:* `30`  
   *Description:* The number of polls per input pattern you want to recognize.
 
-- **Batch Size**  
-  *Recommended:* Any power of 2 from 16 up.  
-  *Description:* The size of each batch used in training. Lower = Better Convergence, Higher = Faster Training
+- **batch_size**  
+  *Type:* Integer  
+  *Recommended:* `64`  
+  *Description:* Number of sequences per training batch.
 
 ---
 
@@ -108,13 +165,10 @@ The training and evaluation process generates three distinct types of graphs. Ea
 - **What It Shows:**  
   This graph presents a supervised model’s confidence (or probability) that the player is cheating.
 - **How to Interpret:**  
-  The higher the graph, the higher the confidence that the player is cheating. You may want to determine a threshold for automatic flagging.
+  The higher the line, the higher the confidence that the player is cheating. You may want to determine a threshold for automatic flagging.
 - **Use Case:**  
   As a supervised approach, this is useful for when you can isolate and identify specific cheating input patterns.
-
-*REMEMBER TO INSERT EXAMPLE GRAPHS HERE!!!*  
-*The visuals should illustrate examples of normal behavior versus potential issues—such as consistent low prediction loss, effective reconstruction, or appropriate confidence levels—and include annotations to guide interpretation.*
-
+  
 ---
 
 ## 5. Best Practices for Intelligent Training
@@ -123,7 +177,7 @@ The training and evaluation process generates three distinct types of graphs. Ea
   Verify that your data is representative of normal player behavior. This can be tricky considering player behavior is naturally random.
   
 - **Iterative Refinement:**  
-  Start with moderate settings for parameters such as `Sequence Length` and `Batch Size`. Use early training results (observed via the graphs) to iteratively refine the configuration.
+  Start with moderate settings for parameters such as `sequence_length` and `batch_size`. Use early training results (observed via the graphs) to iteratively refine the configuration.
   
 - **Balanced Feature Selection:**  
   Experiment with different feature whitelists to determine which inputs contribute most effectively to the model’s performance. Use the graph insights to decide if certain features may be leading to increased loss or reconstruction error.

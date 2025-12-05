@@ -1,0 +1,16 @@
+{
+  "mode": "collect",
+  "model_class": "",
+  "model_file": "",
+  "kill_bind_list": "\\",
+  "kill_bind_logic": "ANY",
+  "capture_bind_list": "right",
+  "capture_bind_logic": "ANY",
+  "keyboard_whitelist": [],
+  "mouse_whitelist": ["angle", "magnitude"],
+  "gamepad_whitelist": [],
+  "polling_rate": 90,
+  "ignore_empty_polls": true,
+  "sequence_length": 30,
+  "batch_size": 64
+}
