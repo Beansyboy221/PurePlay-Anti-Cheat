@@ -52,11 +52,11 @@ This solution is designed for **low-budget game developers** who need a reliable
    ./install.bat
    ```
 
-3. **Start the application**:
+3. **Configure your settings**:
+   Read the [Configuration Guide](https://github.com/Beanthief/PurePlay-Anti-Cheat/tree/main/docs/CONFIG.md) to better understand your options.
+
+4. **Start the application**:
 
    ```sh
    ./start.bat
    ```
-
-4. **Configure your settings**:
-   Read the [Configuration Guide](https://github.com/Beanthief/PurePlay-Anti-Cheat/tree/main/docs/CONFIG.md) to better understand your options.
