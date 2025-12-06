@@ -19,7 +19,7 @@ def run_static_analysis(config: dict) -> None:
     utilities.fit_global_scaler(config['testing_files'], whitelist)
     for file in config['testing_files']:
         test_dataset = utilities.InputDataset(file, sequence_length, whitelist)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size = 1, shuffle=False)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
         trainer = lightning.Trainer(logger=False, enable_checkpointing=False)
         trainer.test(model, dataloaders=test_loader, ckpt_path=None)
 
@@ -35,31 +35,21 @@ def run_live_analysis(config: dict) -> None:
 
     if any(key in config['mouse_whitelist'] for key in ('deltaX', 'deltaY')):
         threading.Thread(target=utilities.listen_for_mouse_movement, daemon=True).start()
-    sequence = []
-
+    
     whitelist = config['keyboard_whitelist'] + config['mouse_whitelist'] + config['gamepad_whitelist']
     sequence_length = model.hparams.sequence_length
+    sequence_buffer = []
     
     print(f'Polling devices for live analysis (press {", ".join(config["kill_bind_list"])} to stop)...')
     while True:
-        row = utilities.poll_all_devices(config['keyboard_whitelist'], config['mouse_whitelist'], config['gamepad_whitelist'])
-        should_write = False
-        if config['capture_bind_list']:
-            pressed_capture_binds = [utilities.is_pressed(bind) for bind in config['capture_bind_list']]
-            if config['capture_bind_logic'] == 'ANY':
-                should_write = any(pressed_capture_binds)
-            else:
-                should_write = all(pressed_capture_binds)
-        else:
-            should_write = not (config['ignore_empty_polls'] and utilities.row_is_empty(row))
-        if should_write:
-            sequence.append(row)
-
-        if len(sequence) == sequence_length:
-            current_sequence = sequence[-sequence_length:]
-            dataframe = pandas.DataFrame(current_sequence, columns=whitelist)
+        row = utilities.poll_if_capturing(config)
+        if row:
+            sequence_buffer.append(row)
+        if len(sequence_buffer) == sequence_length:
+            sequence = sequence_buffer[-sequence_length:]
+            dataframe = pandas.DataFrame(sequence, columns=whitelist)
             
-            scalable_columns = [col for col in utilities.SCALABLE_FEATURES if col in whitelist]
+            scalable_columns = [column for column in utilities.SCALABLE_FEATURES if column in whitelist]
             if scalable_columns:
                 dataframe.loc[:, scalable_columns] = utilities.SCALER.transform(dataframe[scalable_columns])
 
@@ -68,10 +58,8 @@ def run_live_analysis(config: dict) -> None:
 
             match (model.training_type): # Ensure models save their training type
                 case 'supervised':
-                    confidence = torch.sigmoid(output).mean()
-                    print(f'Confidence: {confidence.item()}')
+                    print(f'Confidence: {torch.sigmoid(output).mean().item()}')
                 case 'unsupervised':
-                    reconstruction_error = model.loss_function(output, input_sequence)
-                    print(f'Reconstruction Error: {reconstruction_error.item()}')
-            sequence.pop(0)
+                    print(f'Reconstruction Error: {model.loss_function(output, input_sequence).item()}')
+            sequence_buffer.pop(0)
         time.sleep(1.0 / config['polling_rate'])

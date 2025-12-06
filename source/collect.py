@@ -18,16 +18,7 @@ def collect_input_data(config: dict) -> None:
         csv_writer.writerow(header)
         print(f'Polling devices for collection (press {", ".join(config["kill_bind_list"])} to stop)...')
         while True:
-            should_write = False
-            if config['capture_bind_list']:
-                pressed_capture_binds = [utilities.is_pressed(bind) for bind in config['capture_bind_list']]
-                if config['capture_bind_logic'] == 'ANY':
-                    should_write = any(pressed_capture_binds)
-                else:
-                    should_write = all(pressed_capture_binds)
-            else:
-                should_write = not (config['ignore_empty_polls'] and utilities.row_is_empty(row))
-            if should_write:
-                row = utilities.poll_all_devices(config['keyboard_whitelist'], config['mouse_whitelist'], config['gamepad_whitelist'])
+            row = utilities.poll_if_capturing(config)
+            if row:
                 csv_writer.writerow(row)
             time.sleep(1.0 / config['polling_rate'])

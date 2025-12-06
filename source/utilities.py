@@ -167,9 +167,6 @@ def poll_gamepad(gamepad_whitelist: list) -> list:
                 row.append(0)
     return row
 
-def poll_all_devices(keyboard_whitelist: list, mouse_whitelist: list, gamepad_whitelist: list) -> list:
-    return poll_keyboard(keyboard_whitelist) + poll_mouse(mouse_whitelist) + poll_gamepad(gamepad_whitelist)
-
 def is_pressed(capture_bind: str) -> bool:
     """Determines whether data capture should occur based on the capture bind."""
     if not capture_bind:
@@ -202,8 +199,27 @@ def is_pressed(capture_bind: str) -> bool:
         pass
     return False
 
-def row_is_empty(row: list):
-    return not row.count(0) == len(row)
+def row_is_empty(row: list) -> bool:
+    return not (row.count(0) == len(row))
+
+def poll_if_capturing(config: dict) -> list:
+    capturing = True
+    if config['capture_bind_list']:
+        if len(config['capture_bind_list']) > 1:
+            pressed_capture_binds = [is_pressed(bind) for bind in config['capture_bind_list']]
+            if config['capture_bind_logic'] == 'ANY':
+                capturing = any(pressed_capture_binds)
+            else:
+                capturing = all(pressed_capture_binds)
+        else:
+            if not is_pressed(config['capture_bind_list']):
+                capturing = False
+    if capturing:
+        row = poll_keyboard(config['keyboard_whitelist']) + poll_mouse(config['mouse_whitelist']) + poll_gamepad(config['gamepad_whitelist'])
+        should_write = not (config['ignore_empty_polls'] and row_is_empty(row))
+        if should_write:
+            return row
+    return None
 
 # =============================================================================
 # Utility Classes
@@ -294,7 +310,7 @@ def get_model_class_from_gui(config: dict) -> None:
     tkinter.ttk.Button(frame, text='OK', command=save_and_exit).pack()
     root.mainloop()
 
-    def save_and_exit():
+    def save_and_exit() -> None:
         config['model_class'] = models.AVAILABLE_MODELS[combo_box.get()]
         root.destroy()
 
@@ -317,6 +333,9 @@ def get_validation_files_from_gui(config: dict) -> None:
 
 def get_testing_files_from_gui(config: dict) -> None:
     config['testing_files'] = tkinter.filedialog.askopenfilenames(title='Select testing files', filetypes=[('CSV Files', '*.csv')])
+
+def get_save_dir_from_gui(config: dict) -> None:
+    config['save_dir'] = tkinter.filedialog.askdirectory(title='Select save directory')
 
 def validate_config(config: dict) -> bool:
     list_validations = {

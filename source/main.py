@@ -24,6 +24,8 @@ def main():
 
     if not config['live_graphing']:
         matplotlib.use("agg")
+    if not config['save_dir']:
+        utilities.get_save_dir_from_gui(config)
 
     match config['mode']:
         case 'collect':

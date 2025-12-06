@@ -114,6 +114,11 @@ The mode is set by the `"mode"` key in a config json file.
   *Recommended:* `64`  
   *Description:* Number of sequences per training batch.
 
+- **live_graphing**
+  *Type:* Boolean
+  *Recommended:* `false`
+  *Description:* Whether or not to graph training and analysis results live.
+
 ---
 
 ## 3. Understanding Feature Selection

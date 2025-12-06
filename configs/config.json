@@ -12,5 +12,7 @@
   "polling_rate": 90,
   "ignore_empty_polls": true,
   "sequence_length": 30,
-  "batch_size": 64
+  "batch_size": 64,
+  "live_graphing": true,
+  "save_dir": ""
 }
