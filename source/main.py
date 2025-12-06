@@ -6,17 +6,7 @@ import utilities, analyze, train, collect
 # Main Function
 # =============================================================================
 def main():
-    if torch.cuda.is_available():
-        device = torch.cuda.current_device()
-        major, minor = torch.cuda.get_device_capability(device)
-        processor = torch.cuda.get_device_name(device)
-        has_tensor_cores = (major >= 7)
-
-        if has_tensor_cores:
-            torch.set_float32_matmul_precision('medium')
-            print(f"Tensor Cores detected cc {major}.{minor}) on device '{processor}'. Using medium precision for matmul.")
-        else:
-            print(f"No Tensor Cores detected (cc {major}.{minor}) on device '{processor}'.")
+    utilities.optimize_cuda_for_hardware()
 
     config = utilities.get_config_from_gui()
     if not config:

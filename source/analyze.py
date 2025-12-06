@@ -13,7 +13,7 @@ def run_static_analysis(config: dict) -> None:
     whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
 
     model = config.get('model_class').load_from_checkpoint(config.get('model_file'))
-    sequence_length = model.hparams.sequence_length
+    config['sequence_length'] = model.hparams.sequence_length
     model.save_dir = config.get('save_dir')
 
     utilities.fit_global_scaler(config.get('testing_files'), whitelist)
