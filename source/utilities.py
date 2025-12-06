@@ -360,15 +360,15 @@ def validate_config(config: dict) -> bool:
                 return False
 
     if config.get('kill_bind_logic') not in INPUT_GATES:
-        print('Invalid kill bind logic')
+        print('Invalid kill bind logic config')
         return False
 
     if config.get('capture_bind_logic') not in INPUT_GATES:
-        print('Invalid capture bind logic')
+        print('Invalid capture bind logic config')
         return False
 
     if config.get('model_class') not in models.get_available_models().values():
-        print('Invalid model class')
+        print('Invalid model class config')
         return False
 
     file_keys = [
@@ -385,6 +385,14 @@ def validate_config(config: dict) -> bool:
             if not os.path.isfile(path):
                 print(f'Invalid file in {key}: {path}')
                 return False
+            
+    if not config.get('sequence_length'):
+        print('Missing sequence length config')
+        return False
+    
+    if not config.get('batch_size'):
+        print('Missing batch size config')
+        return False
 
     return True
 
