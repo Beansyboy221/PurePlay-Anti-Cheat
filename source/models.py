@@ -66,9 +66,10 @@ class BaseModel(lightning.LightningModule, ABC):
 
 class AutoencoderBase(BaseModel):
     """Base class for all autoencoder models."""
+    training_type = 'unsupervised'
+
     def __init__(self, num_features: int, hyperparams: dict, sequence_length: int, save_dir: str, trial_number: int = None):
         super().__init__(num_features, hyperparams, sequence_length, save_dir, trial_number)
-        self.training_type = 'unsupervised'
         self.loss_function = torch.nn.MSELoss()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
@@ -117,9 +118,10 @@ class AutoencoderBase(BaseModel):
 
 class ClassifierBase(BaseModel):
     """Base class for all binary classifier models."""
+    training_type = 'supervised'
+
     def __init__(self, num_features: int, hyperparams: dict, sequence_length: int, save_dir: str, trial_number: int = None):
         super().__init__(num_features, hyperparams, sequence_length, save_dir, trial_number)
-        self.training_type = 'supervised'
         self.loss_function = torch.nn.BCEWithLogitsLoss()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:

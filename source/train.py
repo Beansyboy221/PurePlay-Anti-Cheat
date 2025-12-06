@@ -31,26 +31,26 @@ class KillKeyCallback:
 
 def create_dataloaders(config: dict) -> tuple:
     """Creates and returns training and validation dataloaders."""
-    whitelist = config['keyboard_whitelist'] + config['mouse_whitelist'] + config['gamepad_whitelist']
+    whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
 
-    all_training_files = config['training_files']
+    all_training_files = config.get('training_files')
     
-    if config['model_class'].training_type == 'supervised':
-        all_training_files += config['cheat_training_files']
+    if config.get('model_class').training_type == 'supervised':
+        all_training_files += config.get('cheat_training_files')
     
     utilities.fit_global_scaler(all_training_files, whitelist)
     
-    train_datasets = [utilities.InputDataset(file, config['sequence_length'], whitelist) for file in config['training_files']]
-    val_datasets = [utilities.InputDataset(file, config['sequence_length'], whitelist) for file in config['validation_files']]
+    train_datasets = [utilities.InputDataset(file, config) for file in config.get('training_files')]
+    val_datasets = [utilities.InputDataset(file, config) for file in config.get('validation_files')]
 
-    if config['model_class'].training_type == 'supervised':
-        train_datasets += [utilities.InputDataset(file, config['sequence_length'], whitelist, label=1) for file in config['cheat_training_files']]
-        val_datasets += [utilities.InputDataset(file, config['sequence_length'], whitelist, label=1) for file in config['cheat_validation_files']]
+    if config.get('model_class').training_type == 'supervised':
+        train_datasets += [utilities.InputDataset(file, config, label=1) for file in config.get('cheat_training_files')]
+        val_datasets += [utilities.InputDataset(file, config, label=1) for file in config.get('cheat_validation_files')]
 
     train_dataset = torch.utils.data.ConcatDataset(train_datasets)
     val_dataset = torch.utils.data.ConcatDataset(val_datasets)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config['batch_size'], shuffle=False)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.get('batch_size'), shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.get('batch_size'), shuffle=False)
     return train_loader, val_loader
 
 def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader) -> float:
@@ -67,8 +67,8 @@ def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.
         'dropout' : dropout_rate
     }
     
-    whitelist = config['keyboard_whitelist'] + config['mouse_whitelist'] + config['gamepad_whitelist']
-    model = config['model_class'](len(whitelist), hyperparams, config['sequence_length'], config['save_dir'], trial.number)
+    whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
+    model = config.get('model_class')(len(whitelist), hyperparams, config.get('sequence_length'), config.get('save_dir'), trial.number)
     param_count = sum(param.numel() for param in model.parameters() if param.requires_grad)
 
     early_stop_callback = lightning.pytorch.callbacks.EarlyStopping(
@@ -79,7 +79,7 @@ def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.
     )
     checkpoint_callback = lightning.pytorch.callbacks.ModelCheckpoint(
         monitor='val_loss',
-        dirpath=config['save_dir'],
+        dirpath=config.get('save_dir'),
         filename=f"trial_{trial.number}_{param_count}_{time.strftime('%Y%m%d-%H%M%S')}",
         save_top_k=1,
         mode='min'
@@ -126,7 +126,7 @@ def train_model(config: dict) -> None:
     study.optimize(
         lambda trial: objective(trial, config, train_loader, val_loader),
         n_trials=2048,
-        callbacks=[KillKeyCallback(config['kill_bind_list'], config['kill_bind_logic'])],
+        callbacks=[KillKeyCallback(config.get('kill_bind_list'), config.get('kill_bind_logic'))],
         gc_after_trial=True
     )
     

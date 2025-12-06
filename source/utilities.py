@@ -204,19 +204,19 @@ def row_is_empty(row: list) -> bool:
 
 def poll_if_capturing(config: dict) -> list:
     capturing = True
-    if config['capture_bind_list']:
-        if len(config['capture_bind_list']) > 1:
-            pressed_capture_binds = [is_pressed(bind) for bind in config['capture_bind_list']]
-            if config['capture_bind_logic'] == 'ANY':
+    if config.get('capture_bind_list'):
+        if len(config.get('capture_bind_list')) > 1:
+            pressed_capture_binds = [is_pressed(bind) for bind in config.get('capture_bind_list')]
+            if config.get('capture_bind_logic') == 'ANY':
                 capturing = any(pressed_capture_binds)
             else:
                 capturing = all(pressed_capture_binds)
         else:
-            if not is_pressed(config['capture_bind_list']):
+            if not is_pressed(config.get('capture_bind_list')):
                 capturing = False
     if capturing:
-        row = poll_keyboard(config['keyboard_whitelist']) + poll_mouse(config['mouse_whitelist']) + poll_gamepad(config['gamepad_whitelist'])
-        should_write = not (config['ignore_empty_polls'] and row_is_empty(row))
+        row = poll_keyboard(config.get('keyboard_whitelist')) + poll_mouse(config.get('mouse_whitelist')) + poll_gamepad(config.get('gamepad_whitelist'))
+        should_write = not (config.get('ignore_empty_polls') and row_is_empty(row))
         if should_write:
             return row
     return None
@@ -226,15 +226,17 @@ def poll_if_capturing(config: dict) -> list:
 # =============================================================================
 class InputDataset(torch.utils.data.Dataset):
     """Dataset for loading input data from CSV files."""
-    def __init__(self: object, file_path: str, sequence_length: int, whitelist: list[str], label: int = 0):
-        self.sequence_length = sequence_length
+    def __init__(self: object, file_path: str, config: dict, label: int = 0):
+        self.sequence_length = config.get('sequence_length')
         self.label = label
-        
+        whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
         data_frame = self.load_data(file_path)
         self.feature_columns = self.get_feature_columns(data_frame, whitelist)
         data_frame = self.scale_features(data_frame)
         data_array = self.to_numpy_array(data_frame)
         data_array = self.trim_to_sequence_length(data_array)
+        if config.get('ignore_empty_polls'):
+            data_array = self.filter_out_empty_polls(data_array)
         self.data_tensor = torch.from_numpy(data_array)
 
     def load_data(self, file_path: str) -> pandas.DataFrame:
@@ -262,6 +264,10 @@ class InputDataset(torch.utils.data.Dataset):
         if remainder != 0:
             return data_array[:-remainder]
         return data_array
+    
+    def filter_out_empty_polls(self, data_array: numpy.ndarray) -> numpy.ndarray:
+        """Filters out any empty rows (rows of all zeros)"""
+        return data_array[data_array.sum(axis=1) != 0]
 
     def __len__(self):
         return len(self.data_tensor) // self.sequence_length
@@ -302,33 +308,34 @@ def get_config_from_gui() -> dict:
     return json.load(tkinter.filedialog.askopenfile(title='Select configuration file', filetypes=[('JSON Files', '*.json')]))
 
 def get_model_class_from_gui(config: dict) -> None:
+    print(models.AVAILABLE_MODELS)
     root = tkinter.Tk()
-    root.withdraw()
-    frame = tkinter.ttk.Frame(padding=5).pack()
+    frame = tkinter.ttk.Frame(padding=5)
+    frame.pack()
     tkinter.ttk.Label(frame, text='Select model class:').pack()
-    combo_box = tkinter.ttk.Combobox(frame, values=list(models.AVAILABLE_MODELS.keys())).pack()
-    tkinter.ttk.Button(frame, text='OK', command=save_and_exit).pack()
-    root.mainloop()
-
+    combo_box = tkinter.ttk.Combobox(frame, values=list(models.AVAILABLE_MODELS.keys()))
+    combo_box.pack()
     def save_and_exit() -> None:
         config['model_class'] = models.AVAILABLE_MODELS[combo_box.get()]
         root.destroy()
+    tkinter.ttk.Button(frame, text='OK', command=save_and_exit).pack()
+    root.mainloop()
 
 def get_model_file_from_gui(config: dict) -> None:
     config['model_file'] = tkinter.filedialog.askopenfilename(title='Select model file', filetypes=[('Checkpoint Files', '*.ckpt')])
 
 def get_training_files_from_gui(config: dict) -> None:
     config['training_files'] = tkinter.filedialog.askopenfilenames(title='Select training files', filetypes=[('CSV Files', '*.csv')])
-    if not config['model_class']:
+    if not config.get('model_class'):
         return
-    if config['model_class'].training_type == 'supervised':
+    if config.get('model_class').training_type == 'supervised':
         config['cheat_training_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat training files', filetypes=[('CSV Files', '*.csv')])
 
 def get_validation_files_from_gui(config: dict) -> None:
     config['validation_files'] = tkinter.filedialog.askopenfilenames(title='Select validation files', filetypes=[('CSV Files', '*.csv')])
-    if not config['model_class']:
+    if not config.get('model_class'):
         return
-    if config['model_class'].training_type == 'supervised':
+    if config.get('model_class').training_type == 'supervised':
         config['cheat_validation_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat validation files', filetypes=[('CSV Files', '*.csv')])
 
 def get_testing_files_from_gui(config: dict) -> None:

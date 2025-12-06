@@ -22,38 +22,40 @@ def main():
     if not config:
         return print("Configuration cancelled. Exiting.")
 
-    if not config['live_graphing']:
+    if not config.get('live_graphing'):
         matplotlib.use("agg")
-    if not config['save_dir']:
+    if not config.get('save_dir'):
         utilities.get_save_dir_from_gui(config)
 
-    match config['mode']:
+    match config.get('mode'):
         case 'collect':
             collect.collect_input_data(config)
         case 'train':
-            if not config['model_class']:
+            if not config.get('model_class'):
                 utilities.get_model_class_from_gui(config)
-            if not config['training_files']:
+            if not config.get('training_files'):
                 utilities.get_training_files_from_gui(config)
-            if not config['validation_files']:
+            if not config.get('validation_files'):
                 utilities.get_validation_files_from_gui(config)
             if not utilities.validate_config(config):
                 return print("Configuration invalid. Exiting.")
             train.train_model(config)
         case 'test':
-            if not config['model_file']:
+            if not config.get('model_file'):
                 utilities.get_model_file_from_gui(config)
-            if not config['testing_files']:
+            if not config.get('testing_files'):
                 utilities.get_testing_files_from_gui(config)
             if not utilities.validate_config(config):
                 return print("Configuration invalid. Exiting.")
             analyze.run_static_analysis(config)
         case 'deploy':
-            if not config['model_file']:
+            if not config.get('model_file'):
                 utilities.get_model_file_from_gui(config)
             if not utilities.validate_config(config):
                 return print("Configuration invalid. Exiting.")
             analyze.run_live_analysis(config)
+        case _:
+            print(f'Invalid mode: {config.get("mode")}. Exiting...')
 
 if __name__ == '__main__':
     main()
