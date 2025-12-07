@@ -405,30 +405,16 @@ def optimize_cuda_for_hardware():
         major, minor = torch.cuda.get_device_capability(device)
         processor = torch.cuda.get_device_name(device)
         
-        cc = major + minor / 10
         has_tensor_cores = (major >= 7)
-        has_bf16_fastpath = (major >= 8)       # Ampere / Ada / Hopper
-        has_fp8 = (major >= 9)                 # Hopper (H100, RTX 50 series)
         
-        print(f"CUDA device: {processor} (cc {major}.{minor})")
+        print(f"CUDA device: {processor}")
 
-        if has_fp8:
-            torch.set_float32_matmul_precision('high')
-            print("FP8 Transformer Engine detected → Using HIGH matmul precision.")
-        elif has_bf16_fastpath:
-            torch.set_float32_matmul_precision('high')
-            print("BF16 fastpath supported → Using HIGH matmul precision.")
-        elif has_tensor_cores:
+        if has_tensor_cores:
             torch.set_float32_matmul_precision('medium')
             print("Tensor Cores detected → Using MEDIUM matmul precision.")
         else:
             torch.set_float32_matmul_precision('high')
-            print("No Tensor Cores → Using HIGH matmul precision (safe default).")
-
-        if major >= 8:
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
-            print("TF32 enabled for matmul + cuDNN.")
+            print("No Tensor Cores → Using HIGH matmul precision.")
 
         torch.backends.cudnn.benchmark = True
         print("cuDNN benchmark mode enabled (faster convolution selection).")
