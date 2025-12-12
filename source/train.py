@@ -44,8 +44,8 @@ def create_dataloaders(config: dict) -> tuple:
 
     train_dataset = torch.utils.data.ConcatDataset(train_datasets)
     val_dataset = torch.utils.data.ConcatDataset(val_datasets)
-    train_loader = torch.utils.data.DataLoader(train_dataset, sequences_per_batch=config.get('sequences_per_batch'), shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, sequences_per_batch=config.get('sequences_per_batch'), shuffle=False)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.get('sequences_per_batch'), shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.get('sequences_per_batch'), shuffle=False)
     return train_loader, val_loader
 
 def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader) -> float:

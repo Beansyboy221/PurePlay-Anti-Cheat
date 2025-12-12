@@ -355,9 +355,6 @@ def validate_config(config: dict) -> bool:
         'capture_bind_list': BINDABLE_FEATURES,
     }
 
-    print(config.get('kill_bind_list'))
-    print(config.get('capture_bind_list'))
-
     for key, allowed in list_validations.items():
         for bind in config.get(key, []):
             if bind not in allowed:
@@ -391,7 +388,7 @@ def validate_config(config: dict) -> bool:
                 print(f'Invalid file in {key}: {path}')
                 return False
             
-    if not config.get('deployment_window_type') not in ('sliding', 'tumbling'):
+    if config.get('deployment_window_type') not in ('sliding', 'tumbling'):
         print('Invalid deployment window type config')
         return False
             

@@ -20,7 +20,7 @@ def run_static_analysis(config: dict) -> None:
     utilities.fit_global_scaler(config.get('testing_files'), whitelist)
     for file in config.get('testing_files'):
         test_dataset = utilities.InputDataset(file, config)
-        test_loader = torch.utils.data.DataLoader(test_dataset, sequences_per_batch=1, shuffle=False)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
         trainer = lightning.Trainer(logger=False, enable_checkpointing=False)
         trainer.test(model, dataloaders=test_loader, ckpt_path=None)
 
