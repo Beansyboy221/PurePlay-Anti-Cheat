@@ -8,24 +8,19 @@ import utilities
 
 class KillKeyCallback:
     """Optuna callback to stop a study when certain keys are pressed."""
-    def __init__(self, kill_bind_list: list[str], kill_bind_logic: str):
-        self.kill_bind_list = kill_bind_list
-        self.kill_bind_logic = kill_bind_logic
+    def __init__(self, config: dict):
+        self.config = config
         self.stop_flag = False
 
     def stop(self):
         print("Stopping study. Finishing current trial...")
         self.stop_flag = True
 
-    def __call__(self, study: optuna.Study, trial: optuna.Trial):
+    def __call__(self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial):
         if not self.stop_flag:
-            pressed_binds = [b for b in self.kill_bind_list if utilities.is_pressed(b)]
-            if self.kill_bind_logic == "ANY":
-                if any(pressed_binds):
-                    self.stop()
-            else:
-                if len(pressed_binds) == len(self.kill_bind_list):
-                    self.stop()
+            if utilities.should_kill(self.config):
+                self.stop()
+
         if self.stop_flag:
             study.stop()
 
@@ -49,8 +44,8 @@ def create_dataloaders(config: dict) -> tuple:
 
     train_dataset = torch.utils.data.ConcatDataset(train_datasets)
     val_dataset = torch.utils.data.ConcatDataset(val_datasets)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.get('batch_size'), shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.get('batch_size'), shuffle=False)
+    train_loader = torch.utils.data.DataLoader(train_dataset, sequences_per_batch=config.get('sequences_per_batch'), shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, sequences_per_batch=config.get('sequences_per_batch'), shuffle=False)
     return train_loader, val_loader
 
 def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader) -> float:
@@ -68,7 +63,7 @@ def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.
     }
     
     whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
-    model = config.get('model_class')(len(whitelist), hyperparams, config.get('sequence_length'), config.get('save_dir'), trial.number)
+    model = config.get('model_class')(len(whitelist), hyperparams, config.get('polls_per_sequence'), config.get('save_dir'), trial.number)
     param_count = sum(param.numel() for param in model.parameters() if param.requires_grad)
 
     early_stop_callback = lightning.pytorch.callbacks.EarlyStopping(
@@ -85,6 +80,7 @@ def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.
         mode='min'
     )
     prune_callback = optuna.integration.PyTorchLightningPruningCallback(trial, monitor='val_loss')
+    
     trainer = lightning.Trainer(
         max_epochs=1024,
         precision='16-mixed',
@@ -97,17 +93,20 @@ def objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data.
     
     try:
         trainer.fit(model, train_loader, val_loader)
+        val_loss = trainer.callback_metrics.get('val_loss')
+        if val_loss is None:
+            # This can happen if training is interrupted before the first validation epoch completes.
+            # Pruning or early stopping might also cause this.
+            print(f'Trial {trial.number} did not produce a validation loss.')
+            raise optuna.exceptions.TrialPruned()
     finally:
-        matplotlib.pyplot.close(model.figure)
+        if hasattr(model, 'figure'):
+            matplotlib.pyplot.close(model.figure)
 
     print(f'[Early Stopping Triggered!] Trial {trial.number} stopped at epoch {trainer.current_epoch}.')
     best_checkpoint = checkpoint_callback.best_model_path
     if best_checkpoint:
         trial.set_user_attr('best_checkpoint', best_checkpoint)
-    
-    val_loss = trainer.callback_metrics.get('val_loss')
-    if val_loss is None:
-        raise ValueError('Validation loss not found!')
     return val_loss.item()
 
 def train_model(config: dict) -> None:
@@ -126,7 +125,7 @@ def train_model(config: dict) -> None:
     study.optimize(
         lambda trial: objective(trial, config, train_loader, val_loader),
         n_trials=2048,
-        callbacks=[KillKeyCallback(config.get('kill_bind_list'), config.get('kill_bind_logic'))],
+        callbacks=[KillKeyCallback(config)],
         gc_after_trial=True
     )
     

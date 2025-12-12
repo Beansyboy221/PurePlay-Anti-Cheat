@@ -199,27 +199,36 @@ def is_pressed(capture_bind: str) -> bool:
         pass
     return False
 
-def row_is_empty(row: list) -> bool:
-    return not (row.count(0) == len(row))
-
 def poll_if_capturing(config: dict) -> list:
+    """Polls input devices if capture bind(s) are pressed."""
     capturing = True
-    if config.get('capture_bind_list'):
-        if len(config.get('capture_bind_list')) > 1:
-            pressed_capture_binds = [is_pressed(bind) for bind in config.get('capture_bind_list')]
-            if config.get('capture_bind_logic') == 'ANY':
-                capturing = any(pressed_capture_binds)
-            else:
-                capturing = all(pressed_capture_binds)
+    capture_binds = config.get('capture_bind_list', [])
+    if len(capture_binds) > 1:
+        pressed_capture_binds = [is_pressed(bind) for bind in capture_binds]
+        if config.get('capture_bind_logic') == 'ANY':
+            capturing = any(pressed_capture_binds)
         else:
-            if not is_pressed(config.get('capture_bind_list')):
-                capturing = False
+            capturing = all(pressed_capture_binds)
+    elif not is_pressed(capture_binds[0]):
+        capturing = False
     if capturing:
         row = poll_keyboard(config.get('keyboard_whitelist')) + poll_mouse(config.get('mouse_whitelist')) + poll_gamepad(config.get('gamepad_whitelist'))
-        should_write = not (config.get('ignore_empty_polls') and row_is_empty(row))
-        if should_write:
+        if config.get('ignore_empty_polls') and not (row.count(0) == len(row)):
+            return row
+        elif not config.get('ignore_empty_polls'):
             return row
     return None
+
+def should_kill(config: dict) -> bool:
+    """Determines whether the program should be terminated based on kill binds."""
+    kill_bind_list = config.get('kill_bind_list', [])
+    if not kill_bind_list:
+        return False
+    pressed_kill_binds = [is_pressed(bind) for bind in kill_bind_list]
+    if config.get('kill_bind_logic') == 'ANY':
+        return any(pressed_kill_binds)
+    else: # 'ALL'
+        return all(pressed_kill_binds)
 
 # =============================================================================
 # Utility Classes
@@ -227,40 +236,33 @@ def poll_if_capturing(config: dict) -> list:
 class InputDataset(torch.utils.data.Dataset):
     """Dataset for loading input data from CSV files."""
     def __init__(self: object, file_path: str, config: dict, label: int = 0):
-        self.sequence_length = config.get('sequence_length')
+        self.polls_per_sequence = config.get('polls_per_sequence')
         self.label = label
         whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
-        data_frame = self.load_data(file_path)
-        self.feature_columns = self.get_feature_columns(data_frame, whitelist)
+        data_frame = pandas.read_csv(file_path)
+        self.feature_columns = [col for col in whitelist if col in data_frame.columns]
         data_frame = self.scale_features(data_frame)
         data_array = self.to_numpy_array(data_frame)
-        data_array = self.trim_to_sequence_length(data_array)
+        data_array = self.trim_to_polls_per_sequence(data_array)
         if config.get('ignore_empty_polls'):
             data_array = self.filter_out_empty_polls(data_array)
         self.data_tensor = torch.from_numpy(data_array)
 
-    def load_data(self, file_path: str) -> pandas.DataFrame:
-        """Loads data from a CSV file into a pandas DataFrame."""
-        return pandas.read_csv(file_path)
-
-    def get_feature_columns(self, data_frame: pandas.DataFrame, whitelist: list[str]) -> list[str]:
-        """Filters DataFrame columns based on a whitelist."""
-        return [col for col in whitelist if col in data_frame.columns]
-
     def scale_features(self, data_frame: pandas.DataFrame) -> pandas.DataFrame:
         """Scales specified columns of the DataFrame."""
+        df_copy = data_frame.copy()
         scalable_columns = [col for col in SCALABLE_FEATURES if col in self.feature_columns]
         if scalable_columns:
-            data_frame.loc[:, scalable_columns] = SCALER.transform(data_frame[scalable_columns])
-        return data_frame
+            df_copy.loc[:, scalable_columns] = SCALER.transform(df_copy[scalable_columns].astype(numpy.float32))
+        return df_copy
 
     def to_numpy_array(self, data_frame: pandas.DataFrame) -> numpy.ndarray:
         """Converts the DataFrame to a NumPy array of float32."""
         return data_frame[self.feature_columns].values.astype(numpy.float32)
 
-    def trim_to_sequence_length(self, data_array: numpy.ndarray) -> numpy.ndarray:
+    def trim_to_polls_per_sequence(self, data_array: numpy.ndarray) -> numpy.ndarray:
         """Trims the array to be divisible by the sequence length."""
-        remainder = len(data_array) % self.sequence_length
+        remainder = len(data_array) % self.polls_per_sequence
         if remainder != 0:
             return data_array[:-remainder]
         return data_array
@@ -270,11 +272,11 @@ class InputDataset(torch.utils.data.Dataset):
         return data_array[data_array.sum(axis=1) != 0]
 
     def __len__(self):
-        return len(self.data_tensor) // self.sequence_length
+        return len(self.data_tensor) // self.polls_per_sequence
 
     def __getitem__(self, idx):
-        start_idx = idx * self.sequence_length
-        seq = self.data_tensor[start_idx : start_idx + self.sequence_length]
+        start_idx = idx * self.polls_per_sequence
+        seq = self.data_tensor[start_idx : start_idx + self.polls_per_sequence]
         return seq, torch.tensor(self.label, dtype=torch.float32)
 
 # =============================================================================
@@ -353,6 +355,9 @@ def validate_config(config: dict) -> bool:
         'capture_bind_list': BINDABLE_FEATURES,
     }
 
+    print(config.get('kill_bind_list'))
+    print(config.get('capture_bind_list'))
+
     for key, allowed in list_validations.items():
         for bind in config.get(key, []):
             if bind not in allowed:
@@ -386,11 +391,15 @@ def validate_config(config: dict) -> bool:
                 print(f'Invalid file in {key}: {path}')
                 return False
             
-    if not config.get('sequence_length'):
+    if not config.get('deployment_window_type') not in ('sliding', 'tumbling'):
+        print('Invalid deployment window type config')
+        return False
+            
+    if not config.get('polls_per_sequence'):
         print('Missing sequence length config')
         return False
     
-    if not config.get('batch_size'):
+    if not config.get('sequences_per_batch'):
         print('Missing batch size config')
         return False
 

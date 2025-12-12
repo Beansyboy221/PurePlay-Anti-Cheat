@@ -50,21 +50,20 @@ The mode is set by the `"mode"` key in a config json file.
   - Can be selected via GUI.
 
 - **kill_bind_list**  
-  *Type:* String
-  *Recommended:* `"\\"`  
+  *Type:* List of Strings  
+  *Recommended:* `["\\"]`  
   *Description:* The bind that, when pressed, stops the program. For possible values, see all whitelists.
 
 - **kill_bind_logic**  
   *Type:* String
-  *Recommended:* `"\\"`  
   *Description:* Determines whether any or all of the binds must be pressed to stop the program.
   *Possible Values:*  
   - `ANY`
   - `ALL`
 
 - **capture_bind_list**  
-  *Type:* String
-  *Recommended:* `"right"`
+  *Type:* List of Strings  
+  *Recommended:* `["right"]`
   *Description:* The bind that, when pressed, starts data collection. Can be any button from the keyboard or mouse.
 
 - **capture_bind_logic**  
@@ -104,12 +103,20 @@ The mode is set by the `"mode"` key in a config json file.
   *Recommended:* `true`  
   *Description:* Whether or not to save empty input polls.
 
-- **sequence_length**  
+- **polls_per_sequence**  
   *Type:* Integer  
   *Recommended:* `30`  
   *Description:* The number of polls per input pattern you want to recognize.
 
-- **batch_size**  
+- **deployment_window_type**
+  *Type:* String
+  *Recommended:* `"sliding"`
+  *Description:* Determines the windowing strategy for live analysis.
+  *Possible Values:*
+  - `"sliding"`: Analyzes overlapping windows of data. After the buffer is full, each new poll triggers an analysis on the most recent `polls_per_sequence` data points. This provides continuous, responsive analysis.
+  - `"tumbling"`: Analyzes discrete, non-overlapping chunks of data. The system collects a full sequence, analyzes it, and then starts collecting a new one from scratch. This is less computationally intensive but may miss events that occur across window boundaries.
+
+- **sequences_per_batch**  
   *Type:* Integer  
   *Recommended:* `64`  
   *Description:* Number of sequences per training batch.
