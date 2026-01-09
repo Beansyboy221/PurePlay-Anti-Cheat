@@ -4,9 +4,7 @@ import lightning
 import torch
 import time
 
-# =============================================================================
-# Model Registry
-# =============================================================================
+# region Runtime Model Registry
 AVAILABLE_MODELS = {}
 
 def register_model(model: type[lightning.LightningModule]) -> type[lightning.LightningModule]:
@@ -17,10 +15,9 @@ def register_model(model: type[lightning.LightningModule]) -> type[lightning.Lig
 def get_available_models() -> dict[str, type[lightning.LightningModule]]:
     """Returns a dictionary of available model classes."""
     return AVAILABLE_MODELS
+# endregion
 
-# =============================================================================
-# Base Models
-# =============================================================================
+# region Base Models
 class BaseModel(lightning.LightningModule, ABC):
     """Base model for handling shared training, validation, and plotting logic."""
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
@@ -169,10 +166,11 @@ class ClassifierBase(BaseModel):
         figure.savefig(f'{self.save_dir}/report_{self.training_type}_{time.strftime("%Y%m%d-%H%M%S")}.png')
         matplotlib.pyplot.close(figure)
         return super().on_test_end()
+# endregion
 
-# =============================================================================
-# Feedforward Models
-# =============================================================================
+# region Registered Models
+
+# region Feedforward Models
 @register_model
 class FeedforwardAutoencoder(AutoencoderBase):
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
@@ -211,10 +209,9 @@ class FeedforwardBinaryClassifier(ClassifierBase):
         sequences_per_batch = x.size(0)
         x = x.view(sequences_per_batch, -1)
         return self.layers(x).squeeze(-1)
+# endregion
 
-# =============================================================================
-# Fully Connected Models
-# =============================================================================
+# region Fully Connected Models
 @register_model
 class FullyConnectedAutoencoder(AutoencoderBase):
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
@@ -252,10 +249,9 @@ class FullyConnectedBinaryClassifier(ClassifierBase):
         x = x.view(sequences_per_batch * seq_len, -1)
         logits = self.layers(x)
         return logits.view(sequences_per_batch, seq_len).mean(dim=1)
+# endregion
 
-# =============================================================================
-# 1D CNN Models
-# =============================================================================
+# region 1D CNN Models
 @register_model
 class OneDimensionalCNNAutoencoder(AutoencoderBase):
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
@@ -305,10 +301,9 @@ class OneDimensionalCNNBinaryClassifier(ClassifierBase):
         x = self.conv_layers(x)
         x = x.view(x.size(0), -1) # Flatten
         return self.fc_layers(x).squeeze(-1)
+# endregion
 
-# =============================================================================
-# GRU Models
-# =============================================================================
+# region GRU Models
 @register_model
 class GRUAutoencoder(AutoencoderBase):
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
@@ -355,10 +350,9 @@ class GRUBinaryClassifier(ClassifierBase):
         last_output = output[:, -1, :]
         class_prediction = self.classifier_layer(last_output).squeeze(1)
         return class_prediction
+# endregion
 
-# =============================================================================
-# LSTM Models
-# =============================================================================
+# region LSTM Models
 @register_model
 class LSTMAutoencoder(AutoencoderBase):
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
@@ -405,10 +399,9 @@ class LSTMBinaryClassifier(ClassifierBase):
         last_output = output[:, -1, :]
         class_prediction = self.classifier_layer(last_output).squeeze(1)
         return class_prediction
+# endregion
 
-# =============================================================================
-# Transformer Models
-# =============================================================================
+# region Transformer Models
 @register_model
 class TransformerAutoencoder(AutoencoderBase):
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
@@ -437,3 +430,6 @@ class TransformerBinaryClassifier(ClassifierBase):
         last_output = encoded[-1, :, :]  # (B, E)
         class_prediction = self.classifier_layer(last_output).squeeze(1)
         return class_prediction
+# endregion
+
+# endregion

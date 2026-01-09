@@ -1,51 +1,34 @@
 import matplotlib
-import torch
-import utilities, analyze, train, collect
+import constants, config, utilities
+import source.modes.collect as collect
+import source.modes.train as train
+import source.modes.test as test
+import source.modes.deploy as deploy
 
-# =============================================================================
-# Main Function
-# =============================================================================
 def main():
     utilities.optimize_cuda_for_hardware()
-
-    config = utilities.get_config_from_gui()
-    if not config:
-        return print("Configuration cancelled. Exiting.")
-
-    if not config.get('live_graphing'):
+    user_config: dict = config.get_config_from_gui()
+    user_config: dict = config.populate_missing_configs_from_gui(user_config)
+    user_config: config.AppConfig = config.validate_config(user_config)
+    if not user_config:
+        print("Failed to build a valid configuration. Exiting.")
+        return
+    
+    # Global Configs
+    if user_config.live_graphing == False:
         matplotlib.use("agg")
-    if not config.get('save_dir'):
-        utilities.get_save_dir_from_gui(config)
-
-    match config.get('mode'):
-        case 'collect':
-            collect.collect_input_data(config)
-        case 'train':
-            if not config.get('model_class'):
-                utilities.get_model_class_from_gui(config)
-            if not config.get('training_files'):
-                utilities.get_training_files_from_gui(config)
-            if not config.get('validation_files'):
-                utilities.get_validation_files_from_gui(config)
-            if not utilities.validate_config(config):
-                return print("Configuration invalid. Exiting.")
-            train.train_model(config)
-        case 'test':
-            if not config.get('model_file'):
-                utilities.get_model_file_from_gui(config)
-            if not config.get('testing_files'):
-                utilities.get_testing_files_from_gui(config)
-            if not utilities.validate_config(config):
-                return print("Configuration invalid. Exiting.")
-            analyze.run_static_analysis(config)
-        case 'deploy':
-            if not config.get('model_file'):
-                utilities.get_model_file_from_gui(config)
-            if not utilities.validate_config(config):
-                return print("Configuration invalid. Exiting.")
-            analyze.run_live_analysis(config)
+    
+    match user_config.mode:
+        case constants.AppMode.COLLECT:
+            collect.collect_input_data(user_config)
+        case constants.AppMode.TRAIN:
+            train.train_model(user_config)
+        case constants.AppMode.TEST:
+            test.run_static_analysis(user_config)
+        case constants.AppMode.DEPLOY:
+            deploy.run_live_analysis(user_config)
         case _:
-            print(f'Invalid mode: {config.get("mode")}. Exiting...')
+            print(f"Unsupported mode: {user_config.mode}")
 
 if __name__ == '__main__':
     main()

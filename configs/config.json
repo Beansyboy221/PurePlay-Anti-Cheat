@@ -16,8 +16,8 @@
   "polling_rate": 60,
   "ignore_empty_polls": true,
   "polls_per_sequence": 30,
-  "deployment_window_type": "sliding",
   "sequences_per_batch": 64,
+  "deployment_window_type": "sliding",
   "live_graphing": true,
   "save_dir": ""
 }
