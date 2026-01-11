@@ -1,6 +1,4 @@
 mode = "COLLECT"
-
-[base]
 save_dir = ""
 live_graphing = true
 kill_bind_list = ["ESC"]
@@ -10,6 +8,9 @@ kill_bind_logic = "ANY"
 polling_rate = 60
 capture_bind_list = ["right"]
 capture_bind_logic = "ANY"
+keyboard_whitelist = []
+mouse_whitelist = ["deltaX", "deltaY"]
+gamepad_whitelist = []
 
 [train]
 model_class = ""
@@ -28,8 +29,3 @@ polling_rate = 60
 capture_bind_list = ["right"]
 capture_bind_logic = "ANY"
 deployment_window_type = "sliding"
-
-[input]
-keyboard_whitelist = []
-mouse_whitelist = ["deltaX", "deltaY"]
-gamepad_whitelist = []

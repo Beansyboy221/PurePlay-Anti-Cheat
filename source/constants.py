@@ -1,8 +1,8 @@
-from enum import Enum, StrEnum
 import models
+import enum
 
 #region Bind Enums
-KeyBind = StrEnum('KeyBind', [
+KeyBind = enum.StrEnum('KeyBind', [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 
     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '-', '*', 
@@ -17,11 +17,11 @@ KeyBind = StrEnum('KeyBind', [
     'alt gr', 'alt', 'shift', 'right ctrl', 'left ctrl'
 ])
 
-MouseBind = StrEnum('MouseBind', [
+MouseBind = enum.StrEnum('MouseBind', [
     'left', 'right', 'middle', 'x', 'x2', 'deltaX', 'deltaY'
 ])
 
-GamepadBind = StrEnum('GamepadBind', [
+GamepadBind = enum.StrEnum('GamepadBind', [
     'DPAD_UP', 'DPAD_DOWN', 'DPAD_LEFT', 'DPAD_RIGHT', 'START', 'BACK', 
     'LEFT_THUMB', 'RIGHT_THUMB', 'LEFT_SHOULDER', 'RIGHT_SHOULDER', 
     'A', 'B', 'X', 'Y', 'LT', 'RT', 'LX', 'LY', 'RX', 'RY'
@@ -42,19 +42,19 @@ ONE_DIMENSIONAL_BINDS = [bind for bind in ALL_BINDS if bind not in TWO_DIMENSION
 #endregion
 
 #region Config Enums
-class AppMode(Enum):
+class AppMode(enum.Enum):
     COLLECT = "collect"
     TRAIN = "train"
     TEST = "test"
     DEPLOY = "deploy"
 
-class InputGate(Enum):
+class InputGate(enum.Enum):
     ANY = "ANY"
     ALL = "ALL"
 
-class WindowType(Enum):
+class WindowType(enum.Enum):
     SLIDING = "sliding"
     TUMBLING = "tumbling"
 
-MODEL_CLASS = StrEnum("ModelClass", {name: name for name in models.AVAILABLE_MODELS})
+MODEL_CLASS = enum.StrEnum("ModelClass", {name: name for name in models.AVAILABLE_MODELS})
 #endregion

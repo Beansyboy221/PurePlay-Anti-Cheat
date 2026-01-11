@@ -2,14 +2,14 @@ import torch.utils.data
 import lightning
 import utilities
 
-def run_static_analysis(config: dict) -> None:
+def run_static_analysis(config: object) -> None:
     """Performs static analysis on selected data files using a pre-trained model."""
-    model = config.get('model_class').load_from_checkpoint(config.get('model_file'))
+    model = config.model_class.load_from_checkpoint(config.model_file)
     config['polls_per_sequence'] = model.hparams.polls_per_sequence
-    model.save_dir = config.get('save_dir')
+    model.save_dir = config.save_dir
 
     polling_rate = None
-    for file in config.get('testing_files'):
+    for file in config.testing_files:
         test_dataset = utilities.InputDataset(file, config)
 
         if polling_rate is None:

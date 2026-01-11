@@ -5,6 +5,7 @@ import win32gui
 import mouse
 import XInput
 import time
+import torch
 
 #region ctypes Structures for Raw Input
 class RAWINPUTHEADER(ctypes.Structure):
@@ -167,4 +168,31 @@ def is_pressed(bind: str) -> bool:
     except:
         pass
     return False
+#endregion
+
+#region Hardware Compatibility
+TORCH_DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"
+
+def optimize_cuda_for_hardware():
+    if not torch.cuda.is_available():
+        print("CUDA not available — running on CPU.")
+        return
+    
+    device = torch.cuda.current_device()
+    major, minor = torch.cuda.get_device_capability(device)
+    processor = torch.cuda.get_device_name(device)
+    
+    has_tensor_cores = (major >= 7)
+    
+    print(f"CUDA device: {processor}")
+
+    if has_tensor_cores:
+        torch.set_float32_matmul_precision('medium')
+        print("Tensor Cores detected → Using MEDIUM matmul precision.")
+    else:
+        torch.set_float32_matmul_precision('high')
+        print("No Tensor Cores → Using HIGH matmul precision.")
+
+    torch.backends.cudnn.benchmark = True
+    print("cuDNN benchmark mode enabled (faster convolution selection).")
 #endregion

@@ -6,46 +6,74 @@ import models
 import tomllib
 import tkinter.filedialog
 
-#region Pydantic Type Checkers
-class BaseConfig(pydantic.BaseModel):
-    mode: constants.AppMode
-    save_dir: pydantic.DirectoryPath
-    live_graphing: bool = True
-    polling_rate: int = pydantic.Field(default=60, gt=0)
-    kill_bind_list: typing.List[str] = pydantic.Field(default_factory=lambda: ['ESC'])
-    kill_bind_logic: typing.Literal['ANY', 'ALL'] = 'ANY'
-
-class CollectConfig(BaseConfig):
-    mode: typing.Literal[constants.AppMode.COLLECT]
-    capture_bind_list: typing.List[str] = pydantic.Field(default_factory=lambda: ['F8'])
-    capture_bind_logic: typing.Literal['ANY', 'ALL'] = 'ANY'
-
-class TrainConfig(BaseConfig):
-    mode: typing.Literal[constants.AppMode.TRAIN]
-    model_class: typing.Any  # Mandatory for training
-    training_files: typing.List[pydantic.FilePath]
-    validation_files: typing.List[pydantic.FilePath]
-    polls_per_sequence: int = pydantic.Field(default=30, gt=0)
-    sequences_per_batch: int = pydantic.Field(default=64, gt=1)
-
-class TestConfig(BaseConfig):
-    mode: typing.Literal[constants.AppMode.TEST]
-    model_file: pydantic.FilePath
-    testing_files: typing.List[pydantic.FilePath]
-
-class DeployConfig(BaseConfig):
-    mode: typing.Literal[constants.AppMode.DEPLOY]
-    model_file: pydantic.FilePath
-    deployment_window_type: constants.WindowType
-    capture_bind_list: typing.List[str] = pydantic.Field(default_factory=lambda: ['F8'])
-    capture_bind_logic: typing.Literal['ANY', 'ALL'] = 'ANY'
-
-AppConfig = typing.Union[TrainConfig, TestConfig, DeployConfig, CollectConfig]
+#region Custom Validators
+def _validate_model_name(model_name: str) -> typing.Any:
+    if model_name in models.AVAILABLE_MODELS:
+        return models.AVAILABLE_MODELS[model_name]
+    raise ValueError(f"Invalid model class name: {model_name}")
 #endregion
 
-#region Config Control Functions
+#region Pydantic Models
+class SharedConfig(pydantic.BaseModel):
+    """Fields pulled directly from the root of the TOML file."""
+    save_dir: pydantic.DirectoryPath
+    live_graphing: bool = pydantic.Field(default=True)
+    kill_bind_list: typing.List[str] = pydantic.Field(default_factory=lambda: ['ESC'])
+    kill_bind_logic: typing.Literal['ANY', 'ALL'] = pydantic.Field(default='ANY')
+
+class CollectConfig(SharedConfig):
+    """Fields pulled from the [collect] section of the TOML file."""
+    mode: typing.Literal[constants.AppMode.COLLECT]
+    polling_rate: int = pydantic.Field(default=60, validation_alias=pydantic.AliasPath('collect', 'polling_rate'))
+    capture_bind_list: typing.List[str] = pydantic.Field(
+        default_factory=lambda: ['right'], 
+        validation_alias=pydantic.AliasPath('collect', 'capture_bind_list')
+    )
+    capture_bind_logic: typing.Literal['ANY', 'ALL'] = pydantic.Field(
+        default='ANY', 
+        validation_alias=pydantic.AliasPath('collect', 'capture_bind_logic')
+    )
+
+class TrainConfig(SharedConfig):
+    """Fields pulled from the [train] section of the TOML file."""
+    mode: typing.Literal[constants.AppMode.TRAIN]
+    model_class: typing.Annotated[typing.Any, pydantic.BeforeValidator(_validate_model_name)] = pydantic.Field(
+        validation_alias=pydantic.AliasPath('train', 'model_class')
+    )
+    training_files: typing.List[pydantic.FilePath] = pydantic.Field(validation_alias=pydantic.AliasPath('train', 'training_files'))
+    validation_files: typing.List[pydantic.FilePath] = pydantic.Field(validation_alias=pydantic.AliasPath('train', 'validation_files'))
+    polls_per_sequence: int = pydantic.Field(default=30, validation_alias=pydantic.AliasPath('train', 'polls_per_sequence'))
+    sequences_per_batch: int = pydantic.Field(default=64, validation_alias=pydantic.AliasPath('train', 'sequences_per_batch'))
+
+class TestConfig(SharedConfig):
+    """Fields pulled from the [test] section of the TOML file."""
+    mode: typing.Literal[constants.AppMode.TEST]
+    model_file: pydantic.FilePath = pydantic.Field(validation_alias=pydantic.AliasPath('test', 'model_file'))
+    testing_files: typing.List[pydantic.FilePath] = pydantic.Field(validation_alias=pydantic.AliasPath('test', 'testing_files'))
+
+class DeployConfig(SharedConfig):
+    """Fields pulled from the [deploy] section of the TOML file."""
+    mode: typing.Literal[constants.AppMode.DEPLOY]
+    model_file: pydantic.FilePath = pydantic.Field(validation_alias=pydantic.AliasPath('deploy', 'model_file'))
+    deployment_window_type: constants.WindowType = pydantic.Field(validation_alias=pydantic.AliasPath('deploy', 'deployment_window_type'))
+    capture_bind_list: typing.List[str] = pydantic.Field(
+        default_factory=lambda: ['right'], 
+        validation_alias=pydantic.AliasPath('deploy', 'capture_bind_list')
+    )
+    capture_bind_logic: typing.Literal['ANY', 'ALL'] = pydantic.Field(
+        default='ANY', 
+        validation_alias=pydantic.AliasPath('deploy', 'capture_bind_logic')
+    )
+
+AppConfig = typing.Annotated[
+    typing.Union[CollectConfig, TrainConfig, TestConfig, DeployConfig],
+    pydantic.Field(discriminator='mode')
+]
+#endregion
+
+#region Config Functions
 def validate_config(config_dict: dict) -> typing.Optional[AppConfig]:
-    """Attempts to parse the dict into the specific mode's model."""
+    """Parses nested TOML dict into a flat Union model."""
     try:
         config = pydantic.TypeAdapter(AppConfig).validate_python(config_dict)
         print(f"Config validated for mode: {config.mode}")
@@ -59,38 +87,36 @@ def get_config_from_gui() -> dict:
         title='Select TOML configuration file', 
         filetypes=[('TOML Files', '*.toml')]
     )
-    
     if not file_path:
         return {}
-
     with open(file_path, 'rb') as f:
         return tomllib.load(f)
 
 def populate_missing_configs_from_gui(config: dict) -> dict:
-    if not config.get('save_dir'):
+    if not config.save_dir:
         config['save_dir'] = _get_save_dir_from_gui()
-    mode = config.get('mode')
+    mode = config.mode
     if mode == constants.AppMode.COLLECT:
         pass
     elif mode == constants.AppMode.TRAIN:
-        if not config.get('model_class'):
+        if not config.model_class:
             config['model_class'] = _get_model_class_from_gui()
-        if not config.get('training_files'):
+        if not config.training_files:
             config['training_files'] = _get_training_files_from_gui()
-        if not config.get('validation_files'):
+        if not config.validation_files:
             config['validation_files'] = _get_validation_files_from_gui()
     elif mode == constants.AppMode.TEST:
-        if not config.get('model_file'):
+        if not config.model_file:
             config['model_file'] = _get_model_file_from_gui()
-        if not config.get('testing_files'):
+        if not config.testing_files:
             config['testing_files'] = _get_testing_files_from_gui()
     elif mode == constants.AppMode.DEPLOY:
-        if not config.get('model_file'):
+        if not config.model_file:
             config['model_file'] = _get_model_file_from_gui()
     return config
 #endregion
 
-#region Helpers
+#region GUI Helper Functions
 def _get_model_class_from_gui(config: dict) -> None:
     print(models.AVAILABLE_MODELS)
     root = tkinter.Tk()
@@ -110,16 +136,16 @@ def _get_model_file_from_gui(config: dict) -> None:
 
 def _get_training_files_from_gui(config: dict) -> None:
     config['training_files'] = tkinter.filedialog.askopenfilenames(title='Select training files', filetypes=[('HDF5 Files', '*.h5')])
-    if not config.get('model_class'):
+    if not config.model_class:
         return
-    if config.get('model_class').training_type == 'supervised':
+    if config.model_class.training_type == 'supervised':
         config['cheat_training_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat training files', filetypes=[('HDF5 Files', '*.h5')])
 
 def _get_validation_files_from_gui(config: dict) -> None:
     config['validation_files'] = tkinter.filedialog.askopenfilenames(title='Select validation files', filetypes=[('HDF5 Files', '*.h5')])
-    if not config.get('model_class'):
+    if not config.model_class:
         return
-    if config.get('model_class').training_type == 'supervised':
+    if config.model_class.training_type == 'supervised':
         config['cheat_validation_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat validation files', filetypes=[('HDF5 Files', '*.h5')])
 
 def _get_testing_files_from_gui(config: dict) -> None:

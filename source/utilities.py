@@ -8,30 +8,30 @@ import constants, devices
 def poll_if_capturing(config: dict) -> list:
     """Polls input devices if capture bind(s) are pressed."""
     capturing = True
-    capture_binds = config.get('capture_bind_list', [])
+    capture_binds = config.capture_bind_list
     if len(capture_binds) > 1:
         pressed_capture_binds = [devices.is_pressed(bind) for bind in capture_binds]
-        if config.get('capture_bind_logic') == 'ANY':
+        if config.capture_bind_logic == 'ANY':
             capturing = any(pressed_capture_binds)
         else:
             capturing = all(pressed_capture_binds)
     elif not devices.is_pressed(capture_binds[0]):
         capturing = False
     if capturing:
-        row = devices.poll_keyboard(config.get('keyboard_whitelist')) + devices.poll_mouse(config.get('mouse_whitelist')) + devices.poll_gamepad(config.get('gamepad_whitelist'))
-        if config.get('ignore_empty_polls') and not (row.count(0) == len(row)):
+        row = devices.poll_keyboard(config.keyboard_whitelist) + devices.poll_mouse(config.mouse_whitelist) + devices.poll_gamepad(config.gamepad_whitelist)
+        if config.ignore_empty_polls and not (row.count(0) == len(row)):
             return row
-        elif not config.get('ignore_empty_polls'):
+        elif not config.ignore_empty_polls:
             return row
     return None
 
 def should_kill(config: dict) -> bool:
     """Determines whether the program should be terminated based on kill binds."""
-    kill_bind_list = config.get('kill_bind_list', [])
+    kill_bind_list = config.kill_bind_list
     if not kill_bind_list:
         return False
     pressed_kill_binds = [devices.is_pressed(bind) for bind in kill_bind_list]
-    if config.get('kill_bind_logic') == 'ANY':
+    if config.kill_bind_logic == 'ANY':
         return any(pressed_kill_binds)
     else: # 'ALL'
         return all(pressed_kill_binds)
@@ -72,9 +72,9 @@ def get_scaler_state():
 class InputDataset(torch.utils.data.Dataset):
     """Dataset for loading and filtering tensors from HDF5 files."""
     def __init__(self: object, file_path: str, config: dict, label: int = 0):
-        self.polls_per_sequence = config.get('polls_per_sequence')
+        self.polls_per_sequence = config.polls_per_sequence
         self.label = label
-        whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
+        whitelist = config.keyboard_whitelist + config.mouse_whitelist + config.gamepad_whitelist
 
         data_frame = pandas.read_hdf(file_path)
         self.polling_rate = data_frame.attrs.get('polling_rate')
@@ -89,7 +89,7 @@ class InputDataset(torch.utils.data.Dataset):
         data_array = data_frame[self.feature_columns].values.astype(numpy.float32)
         
         # Optionally filter out rows with all zeros
-        if config.get('ignore_empty_polls'):
+        if config.ignore_empty_polls:
             data_array = data_array[data_array.sum(axis=1) != 0] 
 
         # Trim to make divisible by polls_per_sequence
@@ -106,28 +106,4 @@ class InputDataset(torch.utils.data.Dataset):
         start_idx = idx * self.polls_per_sequence
         seq = self.data_tensor[start_idx : start_idx + self.polls_per_sequence]
         return seq, torch.tensor(self.label, dtype=torch.float32)
-#endregion
-
-#region Hardware Compatibility
-def optimize_cuda_for_hardware():
-    if torch.cuda.is_available():
-        device = torch.cuda.current_device()
-        major, minor = torch.cuda.get_device_capability(device)
-        processor = torch.cuda.get_device_name(device)
-        
-        has_tensor_cores = (major >= 7)
-        
-        print(f"CUDA device: {processor}")
-
-        if has_tensor_cores:
-            torch.set_float32_matmul_precision('medium')
-            print("Tensor Cores detected → Using MEDIUM matmul precision.")
-        else:
-            torch.set_float32_matmul_precision('high')
-            print("No Tensor Cores → Using HIGH matmul precision.")
-
-        torch.backends.cudnn.benchmark = True
-        print("cuDNN benchmark mode enabled (faster convolution selection).")
-    else:
-        print("CUDA not available — running on CPU.")
 #endregion

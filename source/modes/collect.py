@@ -3,13 +3,13 @@ import time
 import h5py
 import utilities
 
-def collect_input_data(config: dict) -> None:
-    file_name = f"{config.get('save_dir')}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.h5"
-    header = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
-    polling_rate = config.get('polling_rate')
+def collect_input_data(config: object) -> None:
+    file_name = f"{config.save_dir}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.h5"
+    header = config.keyboard_whitelist + config.mouse_whitelist + config.gamepad_whitelist
+    polling_rate = config.polling_rate
     poll_interval = 1.0 / polling_rate
     
-    if any(key in config.get('mouse_whitelist') for key in ('deltaX', 'deltaY')):
+    if any(key in config.mouse_whitelist for key in ('deltaX', 'deltaY')):
         threading.Thread(target=utilities.listen_for_mouse_movement, daemon=True).start()
     
     with h5py.File(file_name, 'w') as h5_file:
@@ -23,7 +23,7 @@ def collect_input_data(config: dict) -> None:
             compression="gzip"
         )
         
-        print(f'Polling devices for collection (press {", ".join(config.get("kill_bind_list"))} to stop)...')
+        print(f'Polling devices for collection (press {", ".join(config.kill_bind_list)} to stop)...')
         while True:
             if utilities.should_kill(config):
                 print("Kill bind(s) detected. Stopping data collection.")

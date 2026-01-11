@@ -1,17 +1,16 @@
+import collections
 import threading
 import torch
-import time
-import collections
-import utilities
 import numpy
+import time
+import utilities, devices
 
-def run_live_analysis(config: dict) -> None:
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = config.get('model_class').load_from_checkpoint(config.get('model_file'))
-    model.to(device)
+def run_live_analysis(config: object) -> None:
+    model = config.model_class.load_from_checkpoint(config.model_file)
+    model.to(devices.TORCH_DEVICE_TYPE)
     model.eval()
 
-    whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
+    whitelist = config.keyboard_whitelist + config.mouse_whitelist + config.gamepad_whitelist
     polls_per_sequence = model.hparams.polls_per_sequence
 
     scalable_columns = [col for col in utilities.SCALABLE_FEATURES if col in whitelist]
@@ -28,7 +27,7 @@ def run_live_analysis(config: dict) -> None:
 
             with buffer_lock:
                 if len(sequence_buffer) >= polls_per_sequence:
-                    match config.get('deployment_window_type'):
+                    match config.deployment_window_type:
                         case 'tumbling':
                             sequence = list(sequence_buffer)[:polls_per_sequence]
                             sequence_buffer.clear()
@@ -40,7 +39,7 @@ def run_live_analysis(config: dict) -> None:
                 seq_array = numpy.array(sequence, dtype=numpy.float32)
                 if scalable_indices:
                     seq_array[:, scalable_indices] = utilities.SCALER.transform(seq_array[:, scalable_indices])
-                input_sequence = torch.from_numpy(seq_array).to(device).unsqueeze(0)
+                input_sequence = torch.from_numpy(seq_array).to(devices.TORCH_DEVICE_TYPE).unsqueeze(0)
                 output = model(input_sequence)
                 if model.training_type == 'supervised':
                     confidence = torch.sigmoid(output).mean().item()
@@ -51,13 +50,13 @@ def run_live_analysis(config: dict) -> None:
 
             time.sleep(0.001)
 
-    if any(key in config.get('mouse_whitelist') for key in ('deltaX', 'deltaY')):
+    if any(key in config.mouse_whitelist for key in ('deltaX', 'deltaY')):
         threading.Thread(target=utilities.listen_for_mouse_movement, daemon=True).start()
 
     threading.Thread(target=analysis_worker, daemon=True).start()
 
-    print(f'Polling devices for live analysis (press {", ".join(config.get("kill_bind_list"))} to stop)...')
-    poll_interval = 1.0 / config.get("polling_rate")
+    print(f'Polling devices for live analysis (press {", ".join(config.kill_bind_list)} to stop)...')
+    poll_interval = 1.0 / config.polling_rate
 
     while True:
         if utilities.should_kill(config):
