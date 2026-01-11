@@ -6,7 +6,7 @@ import optuna
 import time
 import utilities
 
-# region Training Mode
+#region Training Mode
 def train_model(config: dict) -> None:
     """Tunes hyperparameters and trains the model based on the provided configuration."""
     train_loader, val_loader = _create_dataloaders(config)
@@ -33,9 +33,9 @@ def train_model(config: dict) -> None:
         print(f'{key}:{value}')
     best_trial = study.best_trial
     print(f'\nBest Trial: {best_trial.number} Loss: {best_trial.values[0]}')
-# endregion
+#endregion
 
-# region Helpers
+#region Helpers
 class KillKeyCallback:
     """Optuna callback to stop a study when certain keys are pressed."""
     def __init__(self, config: dict):
@@ -71,6 +71,13 @@ def _create_dataloaders(config: dict) -> tuple:
     if config.get('model_class').training_type == 'supervised':
         train_datasets += [utilities.InputDataset(file, config, label=1) for file in config.get('cheat_training_files')]
         val_datasets += [utilities.InputDataset(file, config, label=1) for file in config.get('cheat_validation_files')]
+
+    polling_rate = None
+    for dataset in train_datasets + val_datasets:
+        if polling_rate is None:
+            polling_rate = dataset.polling_rate
+        else:
+            assert polling_rate == dataset.polling_rate, "Inconsistent polling rates across files."
 
     train_dataset = torch.utils.data.ConcatDataset(train_datasets)
     val_dataset = torch.utils.data.ConcatDataset(val_datasets)
@@ -138,4 +145,4 @@ def _objective(trial: optuna.Trial, config: dict, train_loader: torch.utils.data
     if best_checkpoint:
         trial.set_user_attr('best_checkpoint', best_checkpoint)
     return val_loss.item()
-# endregion
+#endregion

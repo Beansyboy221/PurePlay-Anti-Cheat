@@ -6,7 +6,7 @@ import mouse
 import XInput
 import time
 
-# region ctypes Structures for Raw Input
+#region ctypes Structures for Raw Input
 class RAWINPUTHEADER(ctypes.Structure):
     _fields_ = [
         ("dwType", ctypes.wintypes.DWORD),
@@ -38,28 +38,12 @@ class RAWINPUTDEVICE(ctypes.Structure):
         ("dwFlags", ctypes.wintypes.DWORD),
         ("hwndTarget", ctypes.wintypes.HWND)
     ]
-# endregion
+#endregion
 
-# region Raw Input Listener (mouse only)
+#region Raw Input Listener (mouse only)
 mouse_deltas = [0, 0]  # [delta_x, delta_y]
 mouse_lock = threading.Lock()
 user32_library = ctypes.windll.user32
-
-def _raw_input_window_procedure(window_handle: ctypes.wintypes.HWND, message: ctypes.wintypes.UINT, input_code: ctypes.wintypes.WPARAM, data_handle: ctypes.wintypes.LPARAM) -> ctypes.c_long:
-    if message == 0x00FF:
-        buffer_size = ctypes.wintypes.UINT(0)
-        if not(user32_library.GetRawInputData(data_handle, 0x10000003, None, ctypes.byref(buffer_size), ctypes.sizeof(RAWINPUTHEADER)) == 0):
-            return 0
-        buffer = ctypes.create_string_buffer(buffer_size.value)
-        if user32_library.GetRawInputData(data_handle, 0x10000003, buffer, ctypes.byref(buffer_size), ctypes.sizeof(RAWINPUTHEADER)) == buffer_size.value:
-            raw_input_data = ctypes.cast(buffer, ctypes.POINTER(RAWINPUT)).contents
-            if raw_input_data.header.dwType == 0:
-                delta_x = raw_input_data.mouse.lLastX
-                delta_y = raw_input_data.mouse.lLastY
-                with mouse_lock:
-                    mouse_deltas[0] += delta_x
-                    mouse_deltas[1] += delta_y
-    return win32gui.DefWindowProc(window_handle, message, input_code, data_handle)
 
 def listen_for_mouse_movement() -> None:
     instance_handle = win32gui.GetModuleHandle(None)
@@ -82,9 +66,25 @@ def listen_for_mouse_movement() -> None:
     while True:
         win32gui.PumpWaitingMessages()
         time.sleep(0.001)
-# endregion
 
-# region Device Polling Functions
+def _raw_input_window_procedure(window_handle: ctypes.wintypes.HWND, message: ctypes.wintypes.UINT, input_code: ctypes.wintypes.WPARAM, data_handle: ctypes.wintypes.LPARAM) -> ctypes.c_long:
+    if message == 0x00FF:
+        buffer_size = ctypes.wintypes.UINT(0)
+        if not(user32_library.GetRawInputData(data_handle, 0x10000003, None, ctypes.byref(buffer_size), ctypes.sizeof(RAWINPUTHEADER)) == 0):
+            return 0
+        buffer = ctypes.create_string_buffer(buffer_size.value)
+        if user32_library.GetRawInputData(data_handle, 0x10000003, buffer, ctypes.byref(buffer_size), ctypes.sizeof(RAWINPUTHEADER)) == buffer_size.value:
+            raw_input_data = ctypes.cast(buffer, ctypes.POINTER(RAWINPUT)).contents
+            if raw_input_data.header.dwType == 0:
+                delta_x = raw_input_data.mouse.lLastX
+                delta_y = raw_input_data.mouse.lLastY
+                with mouse_lock:
+                    mouse_deltas[0] += delta_x
+                    mouse_deltas[1] += delta_y
+    return win32gui.DefWindowProc(window_handle, message, input_code, data_handle)
+#endregion
+
+#region Device Polling Functions
 def poll_keyboard(keyboard_whitelist: list) -> list:
     """Returns a list of state values for all binds in the given whitelist."""
     return [1 if keyboard.is_pressed(key) else 0 for key in keyboard_whitelist]
@@ -167,4 +167,4 @@ def is_pressed(bind: str) -> bool:
     except:
         pass
     return False
-# endregion
+#endregion

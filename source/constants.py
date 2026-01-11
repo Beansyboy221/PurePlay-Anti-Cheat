@@ -1,7 +1,7 @@
 from enum import Enum, StrEnum
 import models
 
-# region Bind Enums
+#region Bind Enums
 KeyBind = StrEnum('KeyBind', [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 
     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 
@@ -28,7 +28,7 @@ GamepadBind = StrEnum('GamepadBind', [
 ])
 #endregion
 
-# region Bind Categories
+#region Bind Categories
 ALL_BINDS = list(KeyBind) + list(MouseBind) + list(GamepadBind)
 TWO_DIMENSIONAL_BINDS = {
     MouseBind['deltaX'], 
@@ -41,7 +41,7 @@ TWO_DIMENSIONAL_BINDS = {
 ONE_DIMENSIONAL_BINDS = [bind for bind in ALL_BINDS if bind not in TWO_DIMENSIONAL_BINDS]
 #endregion
 
-# region Config Enums
+#region Config Enums
 class AppMode(Enum):
     COLLECT = "collect"
     TRAIN = "train"

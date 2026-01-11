@@ -4,7 +4,7 @@ import torch
 import numpy
 import constants, devices
 
-# region Device Polling Utilities
+#region Device Polling Utilities
 def poll_if_capturing(config: dict) -> list:
     """Polls input devices if capture bind(s) are pressed."""
     capturing = True
@@ -35,64 +35,69 @@ def should_kill(config: dict) -> bool:
         return any(pressed_kill_binds)
     else: # 'ALL'
         return all(pressed_kill_binds)
-# endregion
+#endregion
 
-# region Data Utilities
-SCALER = sklearn.preprocessing.StandardScaler()
+#region Scaler and Scaler Fitting
+SCALER = sklearn.preprocessing.StandardScaler() # Global scaler instance
 
-def fit_global_scaler(files: list[str], whitelist: list[str]) -> None:
+def fit_global_scaler(file_paths: list[str], whitelist: list[str]) -> None:
     """Fits the global scaler on the given files."""
     scalable_columns = [col for col in constants.TWO_DIMENSIONAL_BINDS if col in whitelist]
     if not scalable_columns:
+        print("No scalable columns found in the whitelist; skipping scaler fitting.")
         return
 
     all_data = []
-    for file in files:
-        df = pandas.read_csv(file, usecols=lambda col: col in scalable_columns)
-        all_data.append(df)
+    for file_path in file_paths:
+        data_frame = pandas.read_hdf(file_path, columns=scalable_columns)
+        all_data.append(data_frame)
 
     if all_data:
         combined_df = pandas.concat(all_data, ignore_index=True)
         SCALER.fit(combined_df[scalable_columns])
 
+def get_scaler_state():
+    """Returns the fitted parameters of the global SCALER."""
+    if hasattr(SCALER, 'mean_'):
+        return {
+            'mean': SCALER.mean_,
+            'var': SCALER.var_,
+            'scale': SCALER.scale_,
+            'n_samples_seen': SCALER.n_samples_seen_
+        }
+    return None
+#endregion
 
+#region Input Dataset
 class InputDataset(torch.utils.data.Dataset):
-    """Dataset for loading input data from CSV files."""
+    """Dataset for loading and filtering tensors from HDF5 files."""
     def __init__(self: object, file_path: str, config: dict, label: int = 0):
         self.polls_per_sequence = config.get('polls_per_sequence')
         self.label = label
         whitelist = config.get('keyboard_whitelist') + config.get('mouse_whitelist') + config.get('gamepad_whitelist')
-        data_frame = pandas.read_csv(file_path)
-        self.feature_columns = [col for col in whitelist if col in data_frame.columns]
-        data_frame = self.scale_features(data_frame)
-        data_array = self.to_numpy_array(data_frame)
-        data_array = self.trim_to_polls_per_sequence(data_array)
-        if config.get('ignore_empty_polls'):
-            data_array = self.filter_out_empty_polls(data_array)
-        self.data_tensor = torch.from_numpy(data_array)
 
-    def scale_features(self, data_frame: pandas.DataFrame) -> pandas.DataFrame:
-        """Scales specified columns of the DataFrame."""
-        df_copy = data_frame.copy()
+        data_frame = pandas.read_hdf(file_path)
+        self.polling_rate = data_frame.attrs.get('polling_rate')
+        self.feature_columns = [col for col in whitelist if col in data_frame.columns]
+        
+        # Scale 2D bind columns
         scalable_columns = [col for col in constants.TWO_DIMENSIONAL_BINDS if col in self.feature_columns]
         if scalable_columns:
-            df_copy.loc[:, scalable_columns] = SCALER.transform(df_copy[scalable_columns].astype(numpy.float32))
-        return df_copy
+            data_frame.loc[:, scalable_columns] = SCALER.transform(data_frame[scalable_columns].astype(numpy.float32))
+        
+        # Convert to numpy array of type float32
+        data_array = data_frame[self.feature_columns].values.astype(numpy.float32)
+        
+        # Optionally filter out rows with all zeros
+        if config.get('ignore_empty_polls'):
+            data_array = data_array[data_array.sum(axis=1) != 0] 
 
-    def to_numpy_array(self, data_frame: pandas.DataFrame) -> numpy.ndarray:
-        """Converts the DataFrame to a NumPy array of float32."""
-        return data_frame[self.feature_columns].values.astype(numpy.float32)
-
-    def trim_to_polls_per_sequence(self, data_array: numpy.ndarray) -> numpy.ndarray:
-        """Trims the array to be divisible by the sequence length."""
-        remainder = len(data_array) % self.polls_per_sequence
-        if remainder != 0:
-            return data_array[:-remainder]
-        return data_array
-    
-    def filter_out_empty_polls(self, data_array: numpy.ndarray) -> numpy.ndarray:
-        """Filters out any empty rows (rows of all zeros)"""
-        return data_array[data_array.sum(axis=1) != 0]
+        # Trim to make divisible by polls_per_sequence
+        excess_rows = len(data_array) % self.polls_per_sequence
+        if excess_rows != 0:
+            data_array = data_array[:-excess_rows]
+        
+        self.data_tensor = torch.from_numpy(data_array)
 
     def __len__(self):
         return len(self.data_tensor) // self.polls_per_sequence
@@ -101,9 +106,9 @@ class InputDataset(torch.utils.data.Dataset):
         start_idx = idx * self.polls_per_sequence
         seq = self.data_tensor[start_idx : start_idx + self.polls_per_sequence]
         return seq, torch.tensor(self.label, dtype=torch.float32)
-# endregion
+#endregion
 
-# region Hardware Compatibility
+#region Hardware Compatibility
 def optimize_cuda_for_hardware():
     if torch.cuda.is_available():
         device = torch.cuda.current_device()
@@ -125,4 +130,4 @@ def optimize_cuda_for_hardware():
         print("cuDNN benchmark mode enabled (faster convolution selection).")
     else:
         print("CUDA not available — running on CPU.")
-# endregion
+#endregion

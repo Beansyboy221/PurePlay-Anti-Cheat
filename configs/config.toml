@@ -1,0 +1,35 @@
+mode = "COLLECT"
+
+[base]
+save_dir = ""
+live_graphing = true
+kill_bind_list = ["ESC"]
+kill_bind_logic = "ANY"
+
+[collect]
+polling_rate = 60
+capture_bind_list = ["right"]
+capture_bind_logic = "ANY"
+
+[train]
+model_class = ""
+training_files = []
+validation_files = []
+polls_per_sequence = 30
+sequences_per_batch = 64
+
+[test]
+model_file = ""
+testing_files = []
+
+[deploy]
+model_file = ""
+polling_rate = 60
+capture_bind_list = ["right"]
+capture_bind_logic = "ANY"
+deployment_window_type = "sliding"
+
+[input]
+keyboard_whitelist = []
+mouse_whitelist = ["deltaX", "deltaY"]
+gamepad_whitelist = []

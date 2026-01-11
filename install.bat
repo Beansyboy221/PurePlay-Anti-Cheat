@@ -90,7 +90,7 @@ if errorlevel 1 (
 )
 
 echo Installing conda packages...
-call "%CONDA_PATH%" install -y -q pytorch-gpu lightning pandas matplotlib optuna optuna-integration pywin32 scikit-learn pydantic pyyaml
+call "%CONDA_PATH%" install -y -q pytorch-gpu lightning pandas matplotlib optuna optuna-integration pywin32 scikit-learn pydantic h5py
 if errorlevel 1 (
     echo Failed to install conda packages.
     pause
