@@ -5,12 +5,16 @@ import utilities
 def run_static_analysis(config: object) -> None:
     """Performs static analysis on selected data files using a pre-trained model."""
     model = config.model_class.load_from_checkpoint(config.model_file)
-    config['polls_per_sequence'] = model.hparams.polls_per_sequence
     model.save_dir = config.save_dir
 
     polling_rate = None
-    for file in config.testing_files:
-        test_dataset = utilities.InputDataset(file, config)
+    for file_path in config.testing_files:
+        test_dataset = utilities.InputDataset(
+            file_path,
+            model.hparams.polls_per_sequence,
+            model.hparams.whitelist,
+            ignore_empty_polls=True
+        )
 
         if polling_rate is None:
             polling_rate = test_dataset.polling_rate

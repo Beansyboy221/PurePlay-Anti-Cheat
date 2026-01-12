@@ -14,10 +14,13 @@ gamepad_whitelist = []
 
 [train]
 model_class = ""
-training_files = []
-validation_files = []
 polls_per_sequence = 30
 sequences_per_batch = 64
+training_files = []
+validation_files = []
+keyboard_whitelist = []
+mouse_whitelist = ["deltaX", "deltaY"]
+gamepad_whitelist = []
 
 [test]
 model_file = ""
@@ -25,7 +28,7 @@ testing_files = []
 
 [deploy]
 model_file = ""
-polling_rate = 60
+write_to_file = true
+deployment_window_type = "sliding"
 capture_bind_list = ["right"]
 capture_bind_logic = "ANY"
-deployment_window_type = "sliding"

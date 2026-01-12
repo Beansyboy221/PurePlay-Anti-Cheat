@@ -1,35 +1,45 @@
 import threading
+import pyarrow
+import queue
 import time
-import h5py
 import utilities
 
 def collect_input_data(config: object) -> None:
-    file_name = f"{config.save_dir}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.h5"
+    """Collects input data and saves it to a Parquet file."""
+    file_name = f"{config.save_dir}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.parquet"
     header = config.keyboard_whitelist + config.mouse_whitelist + config.gamepad_whitelist
-    polling_rate = config.polling_rate
-    poll_interval = 1.0 / polling_rate
+    fields = [(name, pyarrow.float32()) for name in header]
+    fields.append(('polling_rate', pyarrow.int32()))
+    schema = pyarrow.schema(fields)
+    
+    # Parquet Writer Thread
+    data_queue = queue.Queue()
+    kill_event = threading.Event()
+    writer_thread = threading.Thread(
+        target=utilities.parquet_writer_worker,
+        args=(file_name, schema, data_queue, kill_event),
+        daemon=True
+    )
+    writer_thread.start()
     
     if any(key in config.mouse_whitelist for key in ('deltaX', 'deltaY')):
         threading.Thread(target=utilities.listen_for_mouse_movement, daemon=True).start()
     
-    with h5py.File(file_name, 'w') as h5_file:
-        h5_file.attrs['polling_rate'] = polling_rate
-        h5_file.attrs['column_names'] = header
-        dataset = h5_file.create_dataset(
-            'input_data', 
-            shape=(0, len(header)), 
-            maxshape=(None, len(header)), 
-            dtype='float32', 
-            compression="gzip"
-        )
-        
-        print(f'Polling devices for collection (press {", ".join(config.kill_bind_list)} to stop)...')
+    poll_interval = 1.0 / config.polling_rate
+    print(f'Polling at {config.polling_rate}Hz (press {", ".join(config.kill_bind_list)} to stop)...')
+
+    try:
         while True:
             if utilities.should_kill(config):
-                print("Kill bind(s) detected. Stopping data collection.")
+                print("Kill bind(s) detected. Stopping...")
                 break
+            
             row = utilities.poll_if_capturing(config)
             if row:
-                dataset.resize((dataset.shape[0] + 1, dataset.shape[1]))
-                dataset[-1, :] = row
+                data_queue.put(row)
+            
             time.sleep(poll_interval)
+    finally:
+        kill_event.set()
+        writer_thread.join()
+        print(f"Data saved to {file_name}")

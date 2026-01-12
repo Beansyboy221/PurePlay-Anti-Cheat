@@ -33,6 +33,18 @@ class CollectConfig(SharedConfig):
         default='ANY', 
         validation_alias=pydantic.AliasPath('collect', 'capture_bind_logic')
     )
+    keyboard_whitelist: typing.Optional[typing.List[str]] = pydantic.Field(
+        default_factory=lambda: [],
+        validation_alias=pydantic.AliasPath('collect', 'keyboard_whitelist')
+    )
+    mouse_whitelist: typing.Optional[typing.List[str]] = pydantic.Field(
+        default_factory=lambda: ["deltaX", "deltaY"],
+        validation_alias=pydantic.AliasPath('collect', 'mouse_whitelist')
+    )
+    gamepad_whitelist: typing.Optional[typing.List[str]] = pydantic.Field(
+        default_factory=lambda: [],
+        validation_alias=pydantic.AliasPath('collect', 'gamepad_whitelist')
+    )
 
 class TrainConfig(SharedConfig):
     """Fields pulled from the [train] section of the TOML file."""
@@ -42,6 +54,18 @@ class TrainConfig(SharedConfig):
     )
     training_files: typing.List[pydantic.FilePath] = pydantic.Field(validation_alias=pydantic.AliasPath('train', 'training_files'))
     validation_files: typing.List[pydantic.FilePath] = pydantic.Field(validation_alias=pydantic.AliasPath('train', 'validation_files'))
+    keyboard_whitelist: typing.Optional[typing.List[str]] = pydantic.Field(
+        default_factory=lambda: [],
+        validation_alias=pydantic.AliasPath('train', 'keyboard_whitelist')
+    )
+    mouse_whitelist: typing.Optional[typing.List[str]] = pydantic.Field(
+        default_factory=lambda: ["deltaX", "deltaY"],
+        validation_alias=pydantic.AliasPath('train', 'mouse_whitelist')
+    )
+    gamepad_whitelist: typing.Optional[typing.List[str]] = pydantic.Field(
+        default_factory=lambda: [],
+        validation_alias=pydantic.AliasPath('train', 'gamepad_whitelist')
+    )
     polls_per_sequence: int = pydantic.Field(default=30, validation_alias=pydantic.AliasPath('train', 'polls_per_sequence'))
     sequences_per_batch: int = pydantic.Field(default=64, validation_alias=pydantic.AliasPath('train', 'sequences_per_batch'))
 
@@ -55,6 +79,7 @@ class DeployConfig(SharedConfig):
     """Fields pulled from the [deploy] section of the TOML file."""
     mode: typing.Literal[constants.AppMode.DEPLOY]
     model_file: pydantic.FilePath = pydantic.Field(validation_alias=pydantic.AliasPath('deploy', 'model_file'))
+    write_to_file: bool = pydantic.Field(default=True)
     deployment_window_type: constants.WindowType = pydantic.Field(validation_alias=pydantic.AliasPath('deploy', 'deployment_window_type'))
     capture_bind_list: typing.List[str] = pydantic.Field(
         default_factory=lambda: ['right'], 
@@ -89,8 +114,8 @@ def get_config_from_gui() -> dict:
     )
     if not file_path:
         return {}
-    with open(file_path, 'rb') as f:
-        return tomllib.load(f)
+    with open(file_path, 'rb') as file:
+        return tomllib.load(file)
 
 def populate_missing_configs_from_gui(config: dict) -> dict:
     if not config.save_dir:

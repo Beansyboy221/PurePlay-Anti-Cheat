@@ -6,7 +6,6 @@ import optuna
 import time
 import utilities
 
-#region Training Mode
 def train_model(config: object) -> None:
     """Tunes hyperparameters and trains the model based on the provided configuration."""
     train_loader, val_loader = _create_dataloaders(config)
@@ -33,7 +32,6 @@ def train_model(config: object) -> None:
         print(f'{key}:{value}')
     best_trial = study.best_trial
     print(f'\nBest Trial: {best_trial.number} Loss: {best_trial.values[0]}')
-#endregion
 
 #region Helpers
 class KillKeyCallback:

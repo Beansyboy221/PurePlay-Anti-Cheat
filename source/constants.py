@@ -56,5 +56,9 @@ class WindowType(enum.Enum):
     SLIDING = "sliding"
     TUMBLING = "tumbling"
 
+class TrainingType(enum.Enum):
+    SUPERVISED = "supervised"
+    UNSUPERVISED = "unsupervised"
+
 MODEL_CLASS = enum.StrEnum("ModelClass", {name: name for name in models.AVAILABLE_MODELS})
 #endregion

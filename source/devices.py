@@ -46,7 +46,8 @@ mouse_deltas = [0, 0]  # [delta_x, delta_y]
 mouse_lock = threading.Lock()
 user32_library = ctypes.windll.user32
 
-def listen_for_mouse_movement() -> None:
+def listen_for_mouse_movement(kill_event: threading.Event) -> None:
+    """Listens for raw mouse input and updates global mouse delta values."""
     instance_handle = win32gui.GetModuleHandle(None)
     class_name = "RawInputWindow"
     window = win32gui.WNDCLASS()
@@ -64,11 +65,12 @@ def listen_for_mouse_movement() -> None:
     if not user32_library.RegisterRawInputDevices(ctypes.byref(device), 1, ctypes.sizeof(device)):
         raise ctypes.WinError()
 
-    while True:
+    while not kill_event.is_set():
         win32gui.PumpWaitingMessages()
         time.sleep(0.001)
 
 def _raw_input_window_procedure(window_handle: ctypes.wintypes.HWND, message: ctypes.wintypes.UINT, input_code: ctypes.wintypes.WPARAM, data_handle: ctypes.wintypes.LPARAM) -> ctypes.c_long:
+    """Window procedure to handle raw input messages."""
     if message == 0x00FF:
         buffer_size = ctypes.wintypes.UINT(0)
         if not(user32_library.GetRawInputData(data_handle, 0x10000003, None, ctypes.byref(buffer_size), ctypes.sizeof(RAWINPUTHEADER)) == 0):
@@ -174,6 +176,7 @@ def is_pressed(bind: str) -> bool:
 TORCH_DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"
 
 def optimize_cuda_for_hardware():
+    """Optimizes CUDA settings based on detected hardware capabilities."""
     if not torch.cuda.is_available():
         print("CUDA not available — running on CPU.")
         return

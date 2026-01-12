@@ -3,7 +3,7 @@ import matplotlib.pyplot
 import lightning
 import torch
 import time
-import utilities
+import constants, scaler
 
 #region Runtime Model Registry
 AVAILABLE_MODELS = {}
@@ -21,12 +21,13 @@ def get_available_models() -> dict[str, type[lightning.LightningModule]]:
 #region Base Models
 class BaseModel(lightning.LightningModule, ABC):
     """Base model for handling shared training, validation, and plotting logic."""
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
+    def __init__(self, hyperparams: dict, whitelist: list[str], polls_per_sequence: int, save_dir: str, trial_number: int = None):
         super().__init__()
         self.save_hyperparameters()
-        self.polls_per_sequence = polls_per_sequence
+
         self.learning_rate = hyperparams['learning_rate']
-        self.features_per_poll = features_per_poll
+        self.polls_per_sequence = polls_per_sequence
+        self.features_per_poll = len(whitelist) # Consider a better way to save whitelist
 
         self.train_metric_history = []
         self.val_metric_history = []
@@ -40,15 +41,18 @@ class BaseModel(lightning.LightningModule, ABC):
         self.trial_number = trial_number
 
     def on_save_checkpoint(self, checkpoint):
-        checkpoint['scaler_state'] = utilities.get_scaler_state()
+        checkpoint['scaler_state'] = {
+            'mean': scaler.SCALER.mean,
+            'standard_deviation': scaler.SCALER.standard_deviation,
+            'columns': scaler.SCALER.columns
+        }
 
     def on_load_checkpoint(self, checkpoint):
         scaler_state = checkpoint.get('scaler_state')
-        if scaler_state:
-            utilities.SCALER.mean_ = scaler_state['mean']
-            utilities.SCALER.var_ = scaler_state['var']
-            utilities.SCALER.scale_ = scaler_state['scale']
-            utilities.SCALER.n_samples_seen_ = scaler_state['n_samples_seen']
+        if scaler_state is not None:
+            scaler.SCALER.mean = scaler_state['mean']
+            scaler.SCALER.standard_deviation = scaler_state['standard_deviation']
+            scaler.SCALER.columns = scaler_state['columns']
 
     def on_validation_epoch_end(self) -> None:
         avg_train_loss = torch.stack(self.train_metric_history).mean().item() if self.train_metric_history else None
@@ -75,7 +79,7 @@ class BaseModel(lightning.LightningModule, ABC):
 
 class AutoencoderBase(BaseModel):
     """Base class for all autoencoder models."""
-    training_type = 'unsupervised'
+    training_type = constants.TrainingType.UNSUPERVISED
 
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
         super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
@@ -127,7 +131,7 @@ class AutoencoderBase(BaseModel):
 
 class ClassifierBase(BaseModel):
     """Base class for all binary classifier models."""
-    training_type = 'supervised'
+    training_type = constants.TrainingType.SUPERVISED
 
     def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
         super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
