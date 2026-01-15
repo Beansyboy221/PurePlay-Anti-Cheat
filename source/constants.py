@@ -1,4 +1,3 @@
-import models
 import enum
 
 #region Bind Enums
@@ -42,23 +41,21 @@ ONE_DIMENSIONAL_BINDS = [bind for bind in ALL_BINDS if bind not in TWO_DIMENSION
 #endregion
 
 #region Config Enums
-class AppMode(enum.Enum):
+class AppMode(enum.StrEnum):
     COLLECT = "collect"
     TRAIN = "train"
     TEST = "test"
     DEPLOY = "deploy"
 
-class InputGate(enum.Enum):
+class InputGate(enum.StrEnum):
     ANY = "ANY"
     ALL = "ALL"
 
-class WindowType(enum.Enum):
+class WindowType(enum.StrEnum):
     SLIDING = "sliding"
     TUMBLING = "tumbling"
 
-class TrainingType(enum.Enum):
+class TrainingType(enum.StrEnum):
     SUPERVISED = "supervised"
     UNSUPERVISED = "unsupervised"
-
-MODEL_CLASS = enum.StrEnum("ModelClass", {name: name for name in models.AVAILABLE_MODELS})
 #endregion

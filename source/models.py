@@ -21,13 +21,13 @@ def get_available_models() -> dict[str, type[lightning.LightningModule]]:
 #region Base Models
 class BaseModel(lightning.LightningModule, ABC):
     """Base model for handling shared training, validation, and plotting logic."""
-    def __init__(self, hyperparams: dict, whitelist: list[str], polls_per_sequence: int, save_dir: str, trial_number: int = None):
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
         super().__init__()
         self.save_hyperparameters()
 
-        self.learning_rate = hyperparams['learning_rate']
-        self.polls_per_sequence = polls_per_sequence
-        self.features_per_poll = len(whitelist) # Consider a better way to save whitelist
+        self.learning_rate = model_params.get('learning_rate')
+        self.polls_per_sequence = data_params.get('polls_per_sequence') # Should this be a hyperparameter?
+        self.features_per_poll = len(data_params.get('whitelist'))
 
         self.train_metric_history = []
         self.val_metric_history = []
@@ -81,8 +81,8 @@ class AutoencoderBase(BaseModel):
     """Base class for all autoencoder models."""
     training_type = constants.TrainingType.UNSUPERVISED
 
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.loss_function = torch.nn.MSELoss()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
@@ -133,8 +133,8 @@ class ClassifierBase(BaseModel):
     """Base class for all binary classifier models."""
     training_type = constants.TrainingType.SUPERVISED
 
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.loss_function = torch.nn.BCEWithLogitsLoss()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
@@ -189,16 +189,16 @@ class ClassifierBase(BaseModel):
 #region Feedforward Models
 @register_model
 class FeedforwardAutoencoder(AutoencoderBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
-        input_dim = features_per_poll * polls_per_sequence
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
+        input_dim = self.features_per_poll * self.polls_per_sequence
         self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(input_dim, hyperparams['hidden_dim']),
+            torch.nn.Linear(input_dim, model_params['hidden_dim']),
             torch.nn.ReLU(),
-            torch.nn.Dropout(hyperparams['dropout'])
+            torch.nn.Dropout(model_params['dropout'])
         )
         self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(hyperparams['hidden_dim'], input_dim),
+            torch.nn.Linear(model_params['hidden_dim'], input_dim),
             torch.nn.Sigmoid()
         )
 
@@ -211,14 +211,14 @@ class FeedforwardAutoencoder(AutoencoderBase):
 
 @register_model
 class FeedforwardBinaryClassifier(ClassifierBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
-        input_dim = features_per_poll * polls_per_sequence
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
+        input_dim = self.features_per_poll * self.polls_per_sequence
         self.layers = torch.nn.Sequential(
-            torch.nn.Linear(input_dim, hyperparams['hidden_dim']),
+            torch.nn.Linear(input_dim, model_params['hidden_dim']),
             torch.nn.ReLU(),
-            torch.nn.Dropout(hyperparams['dropout']),
-            torch.nn.Linear(hyperparams['hidden_dim'], 1)
+            torch.nn.Dropout(model_params['dropout']),
+            torch.nn.Linear(model_params['hidden_dim'], 1)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -230,15 +230,15 @@ class FeedforwardBinaryClassifier(ClassifierBase):
 #region Fully Connected Models
 @register_model
 class FullyConnectedAutoencoder(AutoencoderBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(features_per_poll, hyperparams['hidden_dim']),
+            torch.nn.Linear(self.features_per_poll, model_params['hidden_dim']),
             torch.nn.ReLU(),
-            torch.nn.Dropout(hyperparams['dropout'])
+            torch.nn.Dropout(model_params['dropout'])
         )
         self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(hyperparams['hidden_dim'], features_per_poll),
+            torch.nn.Linear(model_params['hidden_dim'], self.features_per_poll),
             torch.nn.Sigmoid()
         )
 
@@ -251,13 +251,13 @@ class FullyConnectedAutoencoder(AutoencoderBase):
 
 @register_model
 class FullyConnectedBinaryClassifier(ClassifierBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.layers = torch.nn.Sequential(
-            torch.nn.Linear(features_per_poll, hyperparams['hidden_dim']),
+            torch.nn.Linear(self.features_per_poll, model_params['hidden_dim']),
             torch.nn.ReLU(),
-            torch.nn.Dropout(hyperparams['dropout']),
-            torch.nn.Linear(hyperparams['hidden_dim'], 1)
+            torch.nn.Dropout(model_params['dropout']),
+            torch.nn.Linear(model_params['hidden_dim'], 1)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -270,20 +270,20 @@ class FullyConnectedBinaryClassifier(ClassifierBase):
 #region 1D CNN Models
 @register_model
 class OneDimensionalCNNAutoencoder(AutoencoderBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.encoder = torch.nn.Sequential(
-            torch.nn.Conv1d(features_per_poll, hyperparams['hidden_dim'], kernel_size=3, padding=1),
+            torch.nn.Conv1d(self.features_per_poll, model_params['hidden_dim'], kernel_size=3, padding=1),
             torch.nn.ReLU(),
             torch.nn.MaxPool1d(2, stride=2),
-            torch.nn.Conv1d(hyperparams['hidden_dim'], hyperparams['hidden_dim'] // 2, kernel_size=3, padding=1),
+            torch.nn.Conv1d(model_params['hidden_dim'], model_params['hidden_dim'] // 2, kernel_size=3, padding=1),
             torch.nn.ReLU(),
             torch.nn.MaxPool1d(2, stride=2)
         )
         self.decoder = torch.nn.Sequential(
-            torch.nn.ConvTranspose1d(hyperparams['hidden_dim'] // 2, hyperparams['hidden_dim'], kernel_size=3, stride=2, padding=1, output_padding=1),
+            torch.nn.ConvTranspose1d(model_params['hidden_dim'] // 2, model_params['hidden_dim'], kernel_size=3, stride=2, padding=1, output_padding=1),
             torch.nn.ReLU(),
-            torch.nn.ConvTranspose1d(hyperparams['hidden_dim'], features_per_poll, kernel_size=3, stride=2, padding=1, output_padding=1),
+            torch.nn.ConvTranspose1d(model_params['hidden_dim'], self.features_per_poll, kernel_size=3, stride=2, padding=1, output_padding=1),
             torch.nn.Sigmoid()
         )
 
@@ -295,17 +295,17 @@ class OneDimensionalCNNAutoencoder(AutoencoderBase):
 
 @register_model
 class OneDimensionalCNNBinaryClassifier(ClassifierBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.conv_layers = torch.nn.Sequential(
-            torch.nn.Conv1d(features_per_poll, hyperparams['hidden_dim'], kernel_size=3, padding=1),
+            torch.nn.Conv1d(self.features_per_poll, model_params['hidden_dim'], kernel_size=3, padding=1),
             torch.nn.ReLU(),
             torch.nn.MaxPool1d(2, stride=2),
-            torch.nn.Dropout(hyperparams['dropout'])
+            torch.nn.Dropout(model_params['dropout'])
         )
         # Calculate the flattened size after conv layers
-        conv_output_size = polls_per_sequence // 2
-        flattened_size = hyperparams['hidden_dim'] * conv_output_size
+        conv_output_size = self.polls_per_sequence // 2
+        flattened_size = model_params['hidden_dim'] * conv_output_size
         self.fc_layers = torch.nn.Sequential(
             torch.nn.Linear(flattened_size, 128),
             torch.nn.ReLU(),
@@ -322,23 +322,23 @@ class OneDimensionalCNNBinaryClassifier(ClassifierBase):
 #region GRU Models
 @register_model
 class GRUAutoencoder(AutoencoderBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.encoder = torch.nn.GRU(
-            input_size=features_per_poll,
-            hidden_size=hyperparams['hidden_dim'],
-            num_layers=hyperparams['num_layers'],
+            input_size=self.features_per_poll,
+            hidden_size=model_params['hidden_dim'],
+            num_layers=model_params['num_layers'],
             batch_first=True,
-            dropout=hyperparams['dropout']
+            dropout=model_params['dropout']
         )
         self.decoder = torch.nn.GRU(
-            input_size=hyperparams['hidden_dim'],
-            hidden_size=hyperparams['hidden_dim'],
-            num_layers=hyperparams['num_layers'],
+            input_size=model_params['hidden_dim'],
+            hidden_size=model_params['hidden_dim'],
+            num_layers=model_params['num_layers'],
             batch_first=True,
-            dropout=hyperparams['dropout']
+            dropout=model_params['dropout']
         )
-        self.output_layer = torch.nn.Linear(hyperparams['hidden_dim'], features_per_poll)
+        self.output_layer = torch.nn.Linear(model_params['hidden_dim'], self.features_per_poll)
 
     def forward(self, input_sequence: torch.Tensor) -> torch.Tensor:
         output = input_sequence
@@ -349,16 +349,16 @@ class GRUAutoencoder(AutoencoderBase):
 
 @register_model
 class GRUBinaryClassifier(ClassifierBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.gru= torch.nn.GRU(
-            input_size=features_per_poll,
-            hidden_size=hyperparams['hidden_dim'],
-            num_layers=hyperparams['num_layers'],
+            input_size=self.features_per_poll,
+            hidden_size=model_params['hidden_dim'],
+            num_layers=model_params['num_layers'],
             batch_first=True,
-            dropout=hyperparams['dropout']
+            dropout=model_params['dropout']
         )
-        self.classifier_layer = torch.nn.Linear(hyperparams['hidden_dim'], 1)
+        self.classifier_layer = torch.nn.Linear(model_params['hidden_dim'], 1)
 
     def forward(self, input_sequence: torch.Tensor) -> torch.Tensor:
         output = input_sequence
@@ -371,23 +371,23 @@ class GRUBinaryClassifier(ClassifierBase):
 #region LSTM Models
 @register_model
 class LSTMAutoencoder(AutoencoderBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.encoder = torch.nn.LSTM(
-            input_size=features_per_poll,
-            hidden_size=hyperparams['hidden_dim'],
-            num_layers=hyperparams['num_layers'],
+            input_size=self.features_per_poll,
+            hidden_size=model_params['hidden_dim'],
+            num_layers=model_params['num_layers'],
             batch_first=True,
-            dropout=hyperparams['dropout']
+            dropout=model_params['dropout']
         )
         self.decoder = torch.nn.LSTM(
-            input_size=hyperparams['hidden_dim'],
-            hidden_size=hyperparams['hidden_dim'],
-            num_layers=hyperparams['num_layers'],
+            input_size=model_params['hidden_dim'],
+            hidden_size=model_params['hidden_dim'],
+            num_layers=model_params['num_layers'],
             batch_first=True,
-            dropout=hyperparams['dropout']
+            dropout=model_params['dropout']
         )
-        self.output_layer = torch.nn.Linear(hyperparams['hidden_dim'], features_per_poll)
+        self.output_layer = torch.nn.Linear(model_params['hidden_dim'], self.features_per_poll)
 
     def forward(self, input_sequence: torch.Tensor) -> torch.Tensor:
         output = input_sequence
@@ -398,16 +398,16 @@ class LSTMAutoencoder(AutoencoderBase):
 
 @register_model
 class LSTMBinaryClassifier(ClassifierBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
         self.lstm= torch.nn.LSTM(
-            input_size=features_per_poll,
-            hidden_size=hyperparams['hidden_dim'],
-            num_layers=hyperparams['num_layers'],
+            input_size=self.features_per_poll,
+            hidden_size=model_params['hidden_dim'],
+            num_layers=model_params['num_layers'],
             batch_first=True,
-            dropout=hyperparams['dropout']
+            dropout=model_params['dropout']
         )
-        self.classifier_layer = torch.nn.Linear(hyperparams['hidden_dim'], 1)
+        self.classifier_layer = torch.nn.Linear(model_params['hidden_dim'], 1)
 
     def forward(self, input_sequence: torch.Tensor) -> torch.Tensor:
         output = input_sequence
@@ -420,11 +420,11 @@ class LSTMBinaryClassifier(ClassifierBase):
 #region Transformer Models
 @register_model
 class TransformerAutoencoder(AutoencoderBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
-        encoder_layer = torch.nn.TransformerEncoderLayer(d_model=features_per_poll, nhead=4, dim_feedforward=hyperparams['hidden_dim'], dropout=hyperparams['dropout'])
-        self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=hyperparams['num_layers'])
-        self.output_layer = torch.nn.Linear(features_per_poll, features_per_poll)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
+        encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_per_poll, nhead=4, dim_feedforward=model_params['hidden_dim'], dropout=model_params['dropout'])
+        self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=model_params['num_layers'])
+        self.output_layer = torch.nn.Linear(self.features_per_poll, self.features_per_poll)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.permute(1, 0, 2)  # (S, B, E)
@@ -434,11 +434,11 @@ class TransformerAutoencoder(AutoencoderBase):
 
 @register_model
 class TransformerBinaryClassifier(ClassifierBase):
-    def __init__(self, features_per_poll: int, hyperparams: dict, polls_per_sequence: int, save_dir: str, trial_number: int = None):
-        super().__init__(features_per_poll, hyperparams, polls_per_sequence, save_dir, trial_number)
-        encoder_layer = torch.nn.TransformerEncoderLayer(d_model=features_per_poll, nhead=4, dim_feedforward=hyperparams['hidden_dim'], dropout=hyperparams['dropout'])
-        self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=hyperparams['num_layers'])
-        self.classifier_layer = torch.nn.Linear(features_per_poll, 1)
+    def __init__(self, model_params: dict, data_params: dict, save_dir: str, trial_number: int = None):
+        super().__init__(model_params, data_params, save_dir, trial_number)
+        encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_per_poll, nhead=4, dim_feedforward=model_params['hidden_dim'], dropout=model_params['dropout'])
+        self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=model_params['num_layers'])
+        self.classifier_layer = torch.nn.Linear(self.features_per_poll, 1)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.permute(1, 0, 2)  # (S, B, E)

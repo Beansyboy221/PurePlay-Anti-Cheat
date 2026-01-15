@@ -1,4 +1,4 @@
-mode = "COLLECT"
+mode = "collect"
 save_dir = ""
 live_graphing = true
 kill_bind_list = ["ESC"]
@@ -6,6 +6,7 @@ kill_bind_logic = "ANY"
 
 [collect]
 polling_rate = 60
+ignore_empty_polls = true
 capture_bind_list = ["right"]
 capture_bind_logic = "ANY"
 keyboard_whitelist = []
@@ -13,7 +14,7 @@ mouse_whitelist = ["deltaX", "deltaY"]
 gamepad_whitelist = []
 
 [train]
-model_class = ""
+model_class = "" # e.g., "LSTMAutoencoder" (See documentation or models.py for available models)
 polls_per_sequence = 30
 sequences_per_batch = 64
 training_files = []

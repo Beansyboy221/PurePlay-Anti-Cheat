@@ -1,12 +1,11 @@
 import matplotlib
 import constants, config, devices
-import source.modes.collect as collect
-import source.modes.train as train
-import source.modes.test as test
-import source.modes.deploy as deploy
+import modes.collect as collect
+import modes.train as train
+import modes.test as test
+import modes.deploy as deploy
 
 def main():
-    devices.optimize_cuda_for_hardware()
     app_config: dict = config.get_config_from_gui()
     app_config: dict = config.populate_missing_configs_from_gui(app_config)
     app_config: config.AppConfig = config.validate_config(app_config)
@@ -17,6 +16,8 @@ def main():
     # Global Configs
     if app_config.live_graphing == False:
         matplotlib.use("agg")
+    if app_config.mode != constants.AppMode.COLLECT:
+        devices.optimize_cuda_for_hardware()
     
     match app_config.mode:
         case constants.AppMode.COLLECT:

@@ -25,6 +25,7 @@ class CollectConfig(SharedConfig):
     """Fields pulled from the [collect] section of the TOML file."""
     mode: typing.Literal[constants.AppMode.COLLECT]
     polling_rate: int = pydantic.Field(default=60, validation_alias=pydantic.AliasPath('collect', 'polling_rate'))
+    ignore_empty_polls: bool = pydantic.Field(default=True, validation_alias=pydantic.AliasPath('collect', 'ignore_empty_polls'))
     capture_bind_list: typing.List[str] = pydantic.Field(
         default_factory=lambda: ['right'], 
         validation_alias=pydantic.AliasPath('collect', 'capture_bind_list')
@@ -118,30 +119,33 @@ def get_config_from_gui() -> dict:
         return tomllib.load(file)
 
 def populate_missing_configs_from_gui(config: dict) -> dict:
-    if not config.save_dir:
-        config['save_dir'] = _get_save_dir_from_gui()
-    mode = config.mode
-    if mode == constants.AppMode.COLLECT:
-        pass
-    elif mode == constants.AppMode.TRAIN:
-        if not config.model_class:
-            config['model_class'] = _get_model_class_from_gui()
-        if not config.training_files:
-            config['training_files'] = _get_training_files_from_gui()
-        if not config.validation_files:
-            config['validation_files'] = _get_validation_files_from_gui()
-    elif mode == constants.AppMode.TEST:
-        if not config.model_file:
-            config['model_file'] = _get_model_file_from_gui()
-        if not config.testing_files:
-            config['testing_files'] = _get_testing_files_from_gui()
-    elif mode == constants.AppMode.DEPLOY:
-        if not config.model_file:
-            config['model_file'] = _get_model_file_from_gui()
+    if not config.get('save_dir'):
+        config['save_dir'] = tkinter.filedialog.askdirectory(title='Select save directory')
+    match config.get('mode'):
+        case constants.AppMode.COLLECT:
+            pass
+        case constants.AppMode.TRAIN:
+            if not config.get('model_class'):
+                config['model_class'] = _get_model_class_from_gui()
+            if not config.get('training_files'):
+                config['training_files'] = tkinter.filedialog.askopenfilenames(title='Select training files', filetypes=[('HDF5 Files', '*.h5')])
+            if not config.get('validation_files'):
+                config['validation_files'] = tkinter.filedialog.askopenfilenames(title='Select validation files', filetypes=[('HDF5 Files', '*.h5')])
+            if config['model_class'].training_type == constants.TrainingType.SUPERVISED:
+                if not config.get('cheat_training_files'):
+                    config['cheat_training_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat training files', filetypes=[('HDF5 Files', '*.h5')])
+                if not config.get('cheat_validation_files'):
+                    config['cheat_validation_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat validation files', filetypes=[('HDF5 Files', '*.h5')])
+        case constants.AppMode.TEST:
+            if not config.get('model_file'):
+                config['model_file'] = tkinter.filedialog.askopenfilename(title='Select model file', filetypes=[('Checkpoint Files', '*.ckpt')])
+            if not config.get('testing_files'):
+                config['testing_files'] = tkinter.filedialog.askopenfilenames(title='Select testing files', filetypes=[('HDF5 Files', '*.h5')])
+        case constants.AppMode.DEPLOY:
+            if not config.get('model_file'):
+                config['model_file'] = tkinter.filedialog.askopenfilename(title='Select model file', filetypes=[('Checkpoint Files', '*.ckpt')])
     return config
-#endregion
 
-#region GUI Helper Functions
 def _get_model_class_from_gui(config: dict) -> None:
     print(models.AVAILABLE_MODELS)
     root = tkinter.Tk()
@@ -151,31 +155,9 @@ def _get_model_class_from_gui(config: dict) -> None:
     combo_box = tkinter.ttk.Combobox(frame, values=list(models.AVAILABLE_MODELS.keys()))
     combo_box.pack()
     def save_and_exit() -> None:
-        config['model_class'] = models.AVAILABLE_MODELS[combo_box.get()]
+        model_class = models.AVAILABLE_MODELS[combo_box.get()]
         root.destroy()
+        return model_class
     tkinter.ttk.Button(frame, text='OK', command=save_and_exit).pack()
     root.mainloop()
-
-def _get_model_file_from_gui(config: dict) -> None:
-    config['model_file'] = tkinter.filedialog.askopenfilename(title='Select model file', filetypes=[('Checkpoint Files', '*.ckpt')])
-
-def _get_training_files_from_gui(config: dict) -> None:
-    config['training_files'] = tkinter.filedialog.askopenfilenames(title='Select training files', filetypes=[('HDF5 Files', '*.h5')])
-    if not config.model_class:
-        return
-    if config.model_class.training_type == 'supervised':
-        config['cheat_training_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat training files', filetypes=[('HDF5 Files', '*.h5')])
-
-def _get_validation_files_from_gui(config: dict) -> None:
-    config['validation_files'] = tkinter.filedialog.askopenfilenames(title='Select validation files', filetypes=[('HDF5 Files', '*.h5')])
-    if not config.model_class:
-        return
-    if config.model_class.training_type == 'supervised':
-        config['cheat_validation_files'] = tkinter.filedialog.askopenfilenames(title='Select cheat validation files', filetypes=[('HDF5 Files', '*.h5')])
-
-def _get_testing_files_from_gui(config: dict) -> None:
-    config['testing_files'] = tkinter.filedialog.askopenfilenames(title='Select testing files', filetypes=[('HDF5 Files', '*.h5')])
-
-def _get_save_dir_from_gui(config: dict) -> None:
-    config['save_dir'] = tkinter.filedialog.askdirectory(title='Select save directory')
 #endregion

@@ -1,3 +1,4 @@
+import pyarrow.parquet
 import collections
 import threading
 import pyarrow
@@ -17,9 +18,9 @@ def run_live_analysis(config: object) -> None:
     
     # Analysis Thread
     buffer_lock = threading.Lock()
-    sequence_buffer = collections.deque(maxlen=2*model.hparams.polls_per_sequence)
-    scalable_columns = [col for col in utilities.SCALABLE_FEATURES if col in model.hparams.whitelist]
-    scalable_indices = [model.hparams.whitelist.index(col) for col in scalable_columns]
+    sequence_buffer = collections.deque(maxlen=2*model.hparams.data_params.get('polls_per_sequence'))
+    scalable_columns = [col for col in utilities.SCALABLE_FEATURES if col in model.hparams.data_params.get('whitelist')]
+    scalable_indices = [model.hparams.data_params.get('whitelist').index(col) for col in scalable_columns]
     analysis_thread = threading.Thread(
         target=analysis_worker,
         args=(model, config.deployment_window_type, kill_event, buffer_lock, sequence_buffer, scalable_indices),
@@ -30,9 +31,9 @@ def run_live_analysis(config: object) -> None:
     # Parquet Writer Thread
     if config.write_to_file:
         file_name = f"{config.save_dir}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.parquet"
-        fields = [(name, pyarrow.float32()) for name in model.hparams.whitelist]
-        fields.append(('polling_rate', pyarrow.int32()))
-        schema = pyarrow.schema(fields)
+        header_fields = [(name, pyarrow.float32()) for name in model.hparams.whitelist]
+        metadata = {b'polling_rate': str(model.hparams.data_params.get('polling_rate')).encode('utf-8')}
+        schema = pyarrow.schema(header_fields, metadata=metadata)
         
         data_queue = queue.Queue()
         writer_thread = threading.Thread(
@@ -44,11 +45,7 @@ def run_live_analysis(config: object) -> None:
 
     # Mouse Listener Thread
     if any(key in config.mouse_whitelist for key in ('deltaX', 'deltaY')):
-        mouse_listener_thread = threading.Thread(
-            target=utilities.listen_for_mouse_movement,
-            args=(kill_event),
-            daemon=True
-        )
+        mouse_listener_thread = threading.Thread(target=devices.listen_for_mouse_movement, args=(kill_event,), daemon=True)
         mouse_listener_thread.start()
 
     poll_interval = 1.0 / config.polling_rate
@@ -89,12 +86,12 @@ def analysis_worker(model,
     while not kill_event.is_set():
         sequence = None
         with buffer_lock:
-            if len(sequence_buffer) >= model.hparams.polls_per_sequence:
+            if len(sequence_buffer) >= model.hparams.data_params.get('polls_per_sequence'):
                 if window_type == constants.WindowType.TUMBLING:
-                    sequence = list(sequence_buffer)[:model.hparams.polls_per_sequence]
+                    sequence = list(sequence_buffer)[:model.hparams.data_params.get('polls_per_sequence')]
                     sequence_buffer.clear()
                 else: # sliding
-                    sequence = list(sequence_buffer)[-model.hparams.polls_per_sequence:]
+                    sequence = list(sequence_buffer)[-model.hparams.data_params.get('polls_per_sequence'):]
                     sequence_buffer.popleft()
 
         if sequence:

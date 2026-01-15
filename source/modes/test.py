@@ -11,14 +11,15 @@ def run_static_analysis(config: object) -> None:
     for file_path in config.testing_files:
         test_dataset = utilities.InputDataset(
             file_path,
-            model.hparams.polls_per_sequence,
-            model.hparams.whitelist,
-            ignore_empty_polls=True
+            model.hparams.data_params.get('polls_per_sequence'),
+            model.hparams.data_params.get('whitelist'),
+            model.hparams.data_params.get('ignore_empty_polls')
         )
 
         if polling_rate is None:
             polling_rate = test_dataset.polling_rate
         else:
+            assert polling_rate == model.hparams.data_params.get('polling_rate'), "Inconsistent polling rates between model and test files."
             assert polling_rate == test_dataset.polling_rate, "Inconsistent polling rates across test files."
             
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)

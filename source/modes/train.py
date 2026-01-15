@@ -8,19 +8,25 @@ import utilities
 
 def train_model(config: object) -> None:
     """Tunes hyperparameters and trains the model based on the provided configuration."""
-    train_loader, val_loader = _create_dataloaders(config)
+    train_loader, val_loader, polling_rate = _create_dataloaders(config)
     if not train_loader or not val_loader:
         return print('Dataset loading cancelled. Exiting...')
 
     logging.getLogger('lightning.pytorch').setLevel(logging.ERROR)
 
+    data_params : dict = {
+        'whitelist' : config.keyboard_whitelist + config.mouse_whitelist + config.gamepad_whitelist,
+        'polling_rate' : polling_rate,
+        'ignore_empty_polls' : config.ignore_empty_polls,
+        'polls_per_sequence' : config.polls_per_sequence
+    }
     study = optuna.create_study(
         direction='minimize',
         sampler=optuna.samplers.TPESampler(),
         pruner=optuna.pruners.MedianPruner()
     )
     study.optimize(
-        lambda trial: _objective(trial, config, train_loader, val_loader),
+        lambda trial: _objective(trial, config, data_params, train_loader, val_loader),
         n_trials=2048,
         callbacks=[KillKeyCallback(config)],
         gc_after_trial=True
@@ -63,12 +69,12 @@ def _create_dataloaders(config: object) -> tuple:
     
     utilities.fit_global_scaler(all_training_files, whitelist)
     
-    train_datasets = [utilities.InputDataset(file, config) for file in config.training_files]
-    val_datasets = [utilities.InputDataset(file, config) for file in config.validation_files]
+    train_datasets = [utilities.InputDataset(file, config.polls_per_sequence, whitelist, config.ignore_empty_polls) for file in config.training_files]
+    val_datasets = [utilities.InputDataset(file, config.polls_per_sequence, whitelist, config.ignore_empty_polls) for file in config.validation_files]
 
     if config.model_class.training_type == 'supervised':
-        train_datasets += [utilities.InputDataset(file, config, label=1) for file in config.cheat_training_files]
-        val_datasets += [utilities.InputDataset(file, config, label=1) for file in config.cheat_validation_files]
+        train_datasets += [utilities.InputDataset(file, config.polls_per_sequence, whitelist, config.ignore_empty_polls, label=1) for file in config.cheat_training_files]
+        val_datasets += [utilities.InputDataset(file, config.polls_per_sequence, whitelist, config.ignore_empty_polls, label=1) for file in config.cheat_validation_files]
 
     polling_rate = None
     for dataset in train_datasets + val_datasets:
@@ -81,24 +87,23 @@ def _create_dataloaders(config: object) -> tuple:
     val_dataset = torch.utils.data.ConcatDataset(val_datasets)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.sequences_per_batch, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.sequences_per_batch, shuffle=False)
-    return train_loader, val_loader
+    return train_loader, val_loader, polling_rate
 
-def _objective(trial: optuna.Trial, config: object, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader) -> float:
+def _objective(trial: optuna.Trial, config: object, data_params: int, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader) -> float:
     """Objective function for hyperparameter tuning."""
     num_layers = trial.suggest_int('num_layers', 1, 4)
     dropout_rate = 0.0
     if num_layers > 1:
         dropout_rate = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
 
-    hyperparams : dict = {
+    model_params : dict = {
         'hidden_dim' : trial.suggest_categorical('hidden_dim', [16, 32, 64, 128, 256]),
         'num_layers' : num_layers,
         'learning_rate' : trial.suggest_float('learning_rate', 0.00001, 0.01, log=True),
         'dropout' : dropout_rate
     }
     
-    whitelist = config.keyboard_whitelist + config.mouse_whitelist + config.gamepad_whitelist
-    model = config.model_class(len(whitelist), hyperparams, config.polls_per_sequence, config.save_dir, trial.number)
+    model = config.model_class(model_params, data_params, config.save_dir, trial.number)
     param_count = sum(param.numel() for param in model.parameters() if param.requires_grad)
 
     early_stop_callback = lightning.pytorch.callbacks.EarlyStopping(

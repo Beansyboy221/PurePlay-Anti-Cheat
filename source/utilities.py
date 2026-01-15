@@ -1,3 +1,4 @@
+import pyarrow.parquet
 import threading
 import pyarrow
 import polars
@@ -7,7 +8,6 @@ import numpy
 import time
 import constants, devices, scaler
 
-#region Device Polling Utilities
 def poll_if_capturing(config: dict) -> list:
     """Polls input devices if capture bind(s) are pressed."""
     capturing = True
@@ -38,15 +38,15 @@ def should_kill(config: dict) -> bool:
         return any(pressed_kill_binds)
     else: # 'ALL'
         return all(pressed_kill_binds)
-#endregion
 
 class InputDataset(torch.utils.data.Dataset):
+    """Dataset for input sequences stored in Parquet files."""
     def __init__(self, file_path: str, polls_per_sequence: int, whitelist: list[str], ignore_empty_polls: bool = True, label: int = 0):
         self.polls_per_sequence = polls_per_sequence
         self.label = label
 
         lazy_frame = polars.scan_parquet(file_path)
-        self.polling_rate = lazy_frame.select("polling_rate").first().collect().item()
+        self.polling_rate = lazy_frame.schema.metadata.get(b'polling_rate').decode('utf-8')
 
         # Verify all requested whitelist columns exist in the parquet file.
         missing_columns = [column for column in whitelist if column not in lazy_frame.columns]
@@ -89,7 +89,7 @@ class InputDataset(torch.utils.data.Dataset):
         sequence = self.data_tensor[start_index : start_index + self.polls_per_sequence]
         return sequence, torch.tensor(self.label, dtype=torch.float32)
     
-def parquet_writer_worker(file_name, schema: pyarrow.schema, data_queue: queue, kill_event: threading.Event, polling_rate: int):
+def parquet_writer_worker(file_name: str, schema: pyarrow.schema, data_queue: queue, kill_event: threading.Event):
     """Worker function to write polled data to a Parquet file."""
     with pyarrow.parquet.ParquetWriter(file_name, schema) as writer:
         while not kill_event.is_set():
@@ -102,9 +102,6 @@ def parquet_writer_worker(file_name, schema: pyarrow.schema, data_queue: queue, 
             
             if batch:
                 arrays = [pyarrow.array(column, type=pyarrow.float32()) for column in zip(*batch)]
-                rate_column = pyarrow.array([polling_rate] * len(batch), type=pyarrow.int32())
-                arrays.append(rate_column)
-                
                 table = pyarrow.Table.from_arrays(arrays, schema=schema)
                 writer.write_table(table)
             
