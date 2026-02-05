@@ -68,6 +68,7 @@ class TrainingDataModule(lightning.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.polling_rate = None
+        self.batch_size = 32 # This gets tuned automatically
 
     def setup(self, stage: str = None):
         """Creates and sets up training and validation datasets."""
@@ -104,7 +105,7 @@ class TrainingDataModule(lightning.LightningDataModule):
         return torch.utils.data.DataLoader(
             self.train_dataset, 
             shuffle=True, 
-            batch_size=self.config.sequences_per_batch,
+            batch_size=self.batch_size,
             num_workers=devices.CPU_WORKERS,
             pin_memory=True,
             persistent_workers=True
@@ -114,7 +115,7 @@ class TrainingDataModule(lightning.LightningDataModule):
         return torch.utils.data.DataLoader(
             self.val_dataset, 
             shuffle=False, 
-            batch_size=self.config.sequences_per_batch,
+            batch_size=self.batch_size,
             num_workers=devices.CPU_WORKERS,
             pin_memory=True,
             persistent_workers=True

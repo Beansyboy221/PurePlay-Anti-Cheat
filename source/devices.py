@@ -175,7 +175,8 @@ def is_pressed(bind: str) -> bool:
 
 #region Hardware Optimizations
 TORCH_DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"
-CPU_WORKERS = min(os.cpu_count(), 4) if TORCH_DEVICE_TYPE == "cuda" else os.cpu_count()
+TORCH_DEVICE = torch.device(TORCH_DEVICE_TYPE)
+CPU_WORKERS = max(os.cpu_count()/2, 2) if TORCH_DEVICE_TYPE == "cuda" else os.cpu_count()/2
 
 def optimize_cuda_for_hardware():
     """Optimizes CUDA settings based on detected hardware capabilities."""

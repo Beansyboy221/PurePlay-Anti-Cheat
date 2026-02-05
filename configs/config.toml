@@ -19,7 +19,6 @@ max_cpu_usage_percent = 1000000 # Do we want this one? (it is relative to hardwa
 max_peak_memory_mb = 10000000 # Remember to add config validation for these.
 ignore_empty_polls = true
 polls_per_sequence = 128 # Aim for between 0.5 and 2 seconds (related to polling rate)
-sequences_per_batch = 32 # 16, 32, 64, 128, 256, 512                AUTOMATICALLY MAXIMIZE THIS
 training_file_dir = '' # Remember to suggest to always use single quotes (escape character avoidance)
 cheat_training_file_dir = ''
 validation_file_dir = ''

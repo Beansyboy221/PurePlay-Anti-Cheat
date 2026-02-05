@@ -31,4 +31,5 @@ def main():
             print(f"Unsupported mode: {app_config.mode}")
 
 if __name__ == '__main__':
+    print('Starting PurePlay Anti-Cheat')
     main()

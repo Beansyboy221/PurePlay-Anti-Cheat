@@ -61,7 +61,6 @@ class TrainConfig(SharedConfig):
     max_peak_memory_mb: int = pydantic.Field(default=10000000, validation_alias=pydantic.AliasPath('train', 'max_peak_memory_mb'))
     ignore_empty_polls: bool = pydantic.Field(default=True, validation_alias=pydantic.AliasPath('train', 'ignore_empty_polls'))
     polls_per_sequence: typing.Annotated[int, pydantic.AfterValidator(_validate_even)] = pydantic.Field(default=30, validation_alias=pydantic.AliasPath('train', 'polls_per_sequence'))
-    sequences_per_batch: int = pydantic.Field(default=64, validation_alias=pydantic.AliasPath('train', 'sequences_per_batch'))
     training_file_dir: pydantic.DirectoryPath = pydantic.Field(validation_alias=pydantic.AliasPath('train', 'training_file_dir'))
     validation_file_dir: pydantic.DirectoryPath = pydantic.Field(validation_alias=pydantic.AliasPath('train', 'validation_file_dir'))
     cheat_training_file_dir: typing.Optional[pydantic.DirectoryPath] = pydantic.Field(validation_alias=pydantic.AliasPath('train', 'cheat_training_file_dir')) # Made these optional for now. Remember to handle the case in which they aren't given but needed.

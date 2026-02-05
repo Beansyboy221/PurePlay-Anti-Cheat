@@ -8,14 +8,13 @@ import devices
 def poll_if_capturing(config: dict) -> list:
     """Polls input devices if capture bind(s) are pressed."""
     capturing = True
-    capture_binds = config.capture_bind_list
-    if len(capture_binds) > 1:
-        pressed_capture_binds = [devices.is_pressed(bind) for bind in capture_binds]
+    if len(config.capture_bind_list) > 1:
+        pressed_capture_binds = [devices.is_pressed(bind) for bind in config.capture_bind_list]
         if config.capture_bind_logic == 'ANY':
             capturing = any(pressed_capture_binds)
         else:
             capturing = all(pressed_capture_binds)
-    elif not devices.is_pressed(capture_binds[0]):
+    elif not devices.is_pressed(config.capture_bind_list[0]):
         capturing = False
     if capturing:
         row = devices.poll_keyboard(config.keyboard_whitelist) + devices.poll_mouse(config.mouse_whitelist) + devices.poll_gamepad(config.gamepad_whitelist)
@@ -27,10 +26,9 @@ def poll_if_capturing(config: dict) -> list:
 
 def should_kill(config: dict) -> bool:
     """Determines whether the program should be terminated based on kill binds."""
-    kill_bind_list = config.kill_bind_list
-    if not kill_bind_list:
+    if not config.kill_bind_list:
         return False
-    pressed_kill_binds = [devices.is_pressed(bind) for bind in kill_bind_list]
+    pressed_kill_binds = [devices.is_pressed(bind) for bind in config.kill_bind_list]
     if config.kill_bind_logic == 'ANY':
         return any(pressed_kill_binds)
     else: # 'ALL'
