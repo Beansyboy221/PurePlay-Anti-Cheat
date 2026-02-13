@@ -1,3 +1,4 @@
+import torch
 import enum
 
 #region Bind Enums
@@ -38,6 +39,32 @@ TWO_DIMENSIONAL_BINDS = {
     GamepadBind['RY']
 }
 ONE_DIMENSIONAL_BINDS = [bind for bind in ALL_BINDS if bind not in TWO_DIMENSIONAL_BINDS]
+#endregion
+
+#region Tuning Constants
+MAX_HIDDEN_LAYERS = 4
+MAX_HIDDEN_SIZE = 256
+SUPPORTED_OPTIMIZERS = [
+    torch.optim.Adam,
+    #torch.optim.AdamW,
+    torch.optim.SGD,
+    torch.optim.RMSprop,
+    #torch.optim.Adagrad,
+    #torch.optim.Adadelta,
+    #torch.optim.Adamax,
+    #torch.optim.Adafactor,
+    #torch.optim.ASGD,
+    #torch.optim.NAdam,
+    #torch.optim.RAdam,
+]
+SUPPORTED_SCHEDULERS = [
+    torch.optim.lr_scheduler.ReduceLROnPlateau,
+    #torch.optim.lr_scheduler.ConstantLR,
+    #torch.optim.lr_scheduler.LinearLR,
+    #torch.optim.lr_scheduler.PolynomialLR,
+]
+OPTIMIZER_MAP = {optimizer.__name__: optimizer for optimizer in SUPPORTED_OPTIMIZERS}
+SCHEDULER_MAP = {scheduler.__name__: scheduler for scheduler in SUPPORTED_SCHEDULERS}
 #endregion
 
 #region Config Enums

@@ -18,20 +18,20 @@ class PolarsStandardScaler:
         self.columns = scalable_columns
         stats = (
             polars.scan_parquet(file_paths).select([
-                *[polars.col(c).mean().alias(f"{c}_mean") for c in scalable_columns],
-                *[polars.col(c).std().alias(f"{c}_std") for c in scalable_columns]
+                *[polars.col(column).mean().alias(f'{column}_mean') for column in scalable_columns],
+                *[polars.col(column).std().alias(f'{column}_std') for column in scalable_columns]
             ]).collect(streaming=True)
         )
 
-        self.means = numpy.array([stats[f"{c}_mean"][0] for c in scalable_columns], dtype=numpy.float32)
-        self.stds = numpy.array([stats[f"{c}_std"][0] for c in scalable_columns], dtype=numpy.float32)
+        self.means = numpy.array([stats[f'{column}_mean'][0] for column in scalable_columns], dtype=numpy.float32)
+        self.stds = numpy.array([stats[f'{column}_std'][0] for column in scalable_columns], dtype=numpy.float32)
         self.stds[self.stds == 0] = 1.0
 
 class InputDataset(torch.utils.data.Dataset):
     """Dataset for input sequences stored in Parquet files."""
     def __init__(self, file_path: str, polls_per_sequence: int, whitelist: list[str], ignore_empty_polls: bool = True, label: int = 0):
         self.polls_per_sequence = polls_per_sequence
-        self.polling_rate = pyarrow.parquet.read_metadata(file_path).metadata.get(b"polling_rate", b"1000").decode("utf-8")
+        self.polling_rate = pyarrow.parquet.read_metadata(file_path).metadata.get(b'polling_rate', b'1000').decode("utf-8")
         self.label = label
         lazy_frame = polars.scan_parquet(file_path)
         
@@ -68,7 +68,7 @@ class TrainingDataModule(lightning.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.polling_rate = None
-        self.batch_size = 32 # This gets tuned automatically
+        self.batch_size = 32
 
     def setup(self, stage: str = None):
         """Creates and sets up training and validation datasets."""
@@ -103,7 +103,7 @@ class TrainingDataModule(lightning.LightningDataModule):
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
-            self.train_dataset, 
+            dataset=self.train_dataset, 
             shuffle=True, 
             batch_size=self.batch_size,
             num_workers=devices.CPU_WORKERS,
@@ -113,10 +113,44 @@ class TrainingDataModule(lightning.LightningDataModule):
     
     def val_dataloader(self):
         return torch.utils.data.DataLoader(
-            self.val_dataset, 
+            dataset=self.val_dataset, 
             shuffle=False, 
             batch_size=self.batch_size,
             num_workers=devices.CPU_WORKERS,
             pin_memory=True,
             persistent_workers=True
         )
+    
+class TestingDataModule(lightning.LightningDataModule):
+    def __init__(self, config, model):
+        super().__init__()
+        self.config = config
+        self.model = model
+        self.test_datasets = []
+
+    def setup(self, stage: str = None):
+        testing_files = [os.path.join(self.config.testing_file_dir, file_path) for file_path in os.listdir(self.config.testing_file_dir)]
+        for file_path in testing_files:
+            test_dataset = InputDataset(
+                file_path,
+                self.model.polls_per_sequence,
+                self.model.whitelist,
+                self.model.ignore_empty_polls
+            )
+            
+            if test_dataset.polling_rate != self.model.polling_rate:
+                raise ValueError(f'Model expects polling rate: {self.model.polling_rate}. File: "{file_path}" has polling rate: {test_dataset.polling_rate}.')
+            
+            self.test_datasets.append(test_dataset)
+
+    def test_dataloader(self):
+        return [
+            torch.utils.data.DataLoader(
+                dataset=dataset,
+                batch_size=1,
+                shuffle=False,
+                num_workers=devices.CPU_WORKERS,
+                pin_memory=True,
+                persistent_workers=True
+            ) for dataset in self.test_datasets
+        ]

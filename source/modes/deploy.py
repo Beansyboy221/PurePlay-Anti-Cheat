@@ -14,7 +14,7 @@ def run_live_analysis(config: object) -> None:
     
     # Analysis Thread
     buffer_lock = threading.Lock()
-    sequence_buffer = collections.deque(maxlen=2*model.hparams.get('polls_per_sequence'))
+    sequence_buffer = collections.deque(maxlen=2*model.polls_per_sequence)
     analysis_thread = threading.Thread(
         target=analysis_worker,
         args=(model, config.deployment_window_type, kill_event, buffer_lock, sequence_buffer),
@@ -24,10 +24,11 @@ def run_live_analysis(config: object) -> None:
 
     # Parquet Writer Thread
     if config.write_to_file:
-        file_name = f"{config.save_dir}/inputs_{time.strftime('%Y%m%d-%H%M%S')}.parquet"
-        header_fields = [(name, pyarrow.float32()) for name in model.hparams.get('whitelist')]
-        metadata = {b'polling_rate': str(model.hparams.get('polling_rate')).encode('utf-8')}
-        schema = pyarrow.schema(header_fields, metadata=metadata)
+        file_name = f'{config.save_dir}/inputs_{time.strftime("%b-%d-%Y_%I-%M%p")}.parquet'
+        schema = pyarrow.schema(
+            fields=[(feature, pyarrow.float32()) for feature in model.whitelist], 
+            metadata={b'polling_rate': str(config.polling_rate).encode('utf-8')}
+        )
         
         data_queue = queue.Queue()
         writer_thread = threading.Thread(
@@ -43,12 +44,12 @@ def run_live_analysis(config: object) -> None:
         mouse_listener_thread.start()
 
     poll_interval = 1.0 / config.polling_rate
-    print(f'Polling at {config.polling_rate}Hz (press {", ".join(config.kill_bind_list)} to stop)...')
+    print(f'Polling at {config.polling_rate}Hz (press {', '.join(config.kill_bind_list)} to stop)...')
 
     try:
         while True:
             if utilities.should_kill(config):
-                print("Kill bind(s) detected. Stopping...")
+                print('Kill bind(s) detected. Stopping...')
                 break
 
             row = utilities.poll_if_capturing(config)
@@ -66,7 +67,7 @@ def run_live_analysis(config: object) -> None:
             mouse_listener_thread.join()
         if config.write_to_file:
             writer_thread.join()
-            print(f"Data saved to {file_name}")
+            print(f'Data saved to {file_name}')
 
 @torch.no_grad()
 def analysis_worker(model, 
@@ -75,17 +76,15 @@ def analysis_worker(model,
                     buffer_lock: threading.Lock, 
                     sequence_buffer: collections.deque) -> None:
     """Worker function to perform live analysis on input sequences."""
-    polls_per_sequence = model.hparams.get('polls_per_sequence')
-
     while not kill_event.is_set():
         sequence = None
         with buffer_lock:
-            if len(sequence_buffer) >= polls_per_sequence:
+            if len(sequence_buffer) >= model.polls_per_sequence:
                 if window_type == constants.WindowType.TUMBLING:
-                    sequence = list(sequence_buffer)[:polls_per_sequence]
+                    sequence = list(sequence_buffer)[:model.polls_per_sequence]
                     sequence_buffer.clear()
                 else: # sliding
-                    sequence = list(sequence_buffer)[-polls_per_sequence:]
+                    sequence = list(sequence_buffer)[-model.polls_per_sequence:]
                     sequence_buffer.popleft()
 
         if sequence:

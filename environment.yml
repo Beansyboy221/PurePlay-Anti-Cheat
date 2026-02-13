@@ -1,0 +1,32 @@
+name: PurePlay-Anti-Cheat
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # --- Base Dependencies ---
+  - python=3.11
+  - pip
+
+  # --- Conda Packages ---
+  - pydantic
+  - pywin32
+  - pyarrow
+  - pyarrow-stubs
+  - pandas
+  - polars
+  - pytorch-gpu
+  - lightning
+  - lightning[extra]
+  - tensorboard
+  - optuna
+  - optuna-integration
+  - plotly
+  - scikit-learn
+  - psutil
+  - onnx
+
+  # --- Pip Packages ---
+  - pip:
+    - XInput-Python
+    - keyboard
+    - mouse
